@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Backs up Steam screenshots into per-game folders with readable, chronologically sortable filenames.
 
@@ -6,8 +6,9 @@
     Scans the screenshot store of every Steam account on this machine, resolves appids to real game
     names (local app manifests first, Steam store API as a cached fallback), and copies screenshots
     into a destination folder organized by game. Filenames are converted from Steam's raw
-    YYYYMMDDHHMMSS_N format to "YYYY-MM-DD HH.MM.SS - N" so that sorting by name equals sorting by
-    capture time. Runs are incremental: files already backed up (matching name and size) are skipped.
+    YYYYMMDDHHMMSS_N format to "YYYY-MM-DD HH.MM.SS" (same-second extras get " (2)", " (3)"...)
+    so that sorting by name equals sorting by capture time. Runs are incremental: files already
+    backed up (matching name and size) are skipped.
 
 .PARAMETER Destination
     Root folder for the backup. Created if it doesn't exist.
@@ -84,13 +85,15 @@ function Get-SafeName([string]$name) {
 }
 
 function Convert-ScreenshotName([string]$fileName) {
-    # 20260706210532_1.jpg -> "2026-07-06 21.05.32 - 1.jpg" (name sort = chronological)
+    # 20260706210532_1.jpg -> "2026-07-06 21.05.32.jpg"; same-second extras get " (2)", " (3)"...
     $m = [regex]::Match($fileName, '^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_(\d+)(\.\w+)$')
     if (-not $m.Success) { return $fileName }   # unknown format -> keep as-is
-    return "{0}-{1}-{2} {3}.{4}.{5} - {6}{7}" -f `
+    $n = [int]$m.Groups[7].Value
+    $suffix = if ($n -gt 1) { " ($n)" } else { '' }
+    return "{0}-{1}-{2} {3}.{4}.{5}{6}{7}" -f `
         $m.Groups[1].Value, $m.Groups[2].Value, $m.Groups[3].Value,
         $m.Groups[4].Value, $m.Groups[5].Value, $m.Groups[6].Value,
-        [int]$m.Groups[7].Value, $m.Groups[8].Value
+        $suffix, $m.Groups[8].Value
 }
 
 # --- Scan userdata and copy ---

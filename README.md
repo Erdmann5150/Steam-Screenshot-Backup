@@ -1,69 +1,80 @@
-# Steam Screenshot Backup
+﻿# Steam Screenshot Backup
 
-A zero-dependency PowerShell script that consolidates all of your Steam screenshots
-into one folder — organized by **real game name** instead of appid, with filenames
-you can actually read.
+Automatically consolidates every Steam screenshot into one folder â€” organized by
+**real game name** instead of appid, with filenames you can actually read.
 
-Steam buries screenshots in `userdata\<id>\760\remote\<appid>\screenshots` with names
-like `20260706210532_1.jpg`. This script turns that into:
+Steam buries screenshots in `userdata\<id>\760\remote\<appid>\screenshots` under
+names like `20260706210532_1.jpg`. This project turns that into:
 
 ```
 Steam Screenshots/
-├── Slay the Spire/
-│   ├── 2026-04-12 13.37.15 - 1.jpg
-│   └── 2026-04-12 15.06.32 - 1.jpg
-├── Yakuza Kiwami/
-│   └── 2025-08-25 20.46.10 - 1.jpg
-└── ...
+â”œâ”€â”€ Slay the Spire/
+â”‚   â”œâ”€â”€ 2026-04-12 13.37.15.jpg
+â”‚   â””â”€â”€ 2026-04-12 15.06.32.jpg
+â”œâ”€â”€ Yakuza Kiwami/
+â”‚   â””â”€â”€ 2025-08-25 20.46.10.jpg
+â””â”€â”€ ...
 ```
 
-## Features
+Two ways to use it:
 
-- **Real game names** — resolved from local Steam app manifests for installed games,
-  with the Steam store API as a fallback for uninstalled ones (cached locally, so
-  each game is only ever looked up once)
-- **Readable, sortable filenames** — `YYYY-MM-DD HH.MM.SS - N`, so sorting by name
-  is identical to sorting by capture time
-- **Incremental** — already-backed-up files are skipped; safe to run on a schedule
-- **Complete coverage** — scans every Steam account on the machine and every
-  library folder on every drive
-- **Non-destructive** — Steam's own screenshot store is never modified
-- **No dependencies** — plain Windows PowerShell 5.1, ships with Windows 10/11
+| | Best for |
+|---|---|
+| **Tray app** (recommended) | Set-and-forget. Watches Steam in real time and backs up each screenshot the moment you take it. |
+| **PowerShell script** | Scripters. One-shot or scheduled runs via Task Scheduler, no resident process. |
 
-## Quick start
+Both produce identical output and share the same game-name cache â€” switch between
+them freely.
+
+## Tray app
+
+1. Download `SteamScreenshotBackup.exe` from the [latest release](../../releases/latest).
+2. Run it. Pick a backup folder and (optionally) enable start-with-Windows. That's
+   the entire setup.
+
+From then on:
+
+- Every screenshot you take is copied within about a second of Steam saving it
+- A catch-up scan runs at each launch, so nothing taken while the app was closed
+  is missed
+- Right-click the tray icon for **Back up now**, **Open backup folder**,
+  **Pause watching**, **Start with Windows**, **Change backup folder**, **Exit**
+- The tray tooltip shows the most recent backup
+
+> **Windows SmartScreen:** the exe is unsigned, so the first run may show
+> *"Windows protected your PC."* Click **More info â†’ Run anyway** â€” or build from
+> source (below) if you'd rather not trust a downloaded binary.
+
+## PowerShell script
+
+Zero dependencies â€” Windows PowerShell 5.1+, which ships with Windows 10/11:
 
 ```powershell
-git clone https://github.com/<you>/steam-screenshot-backup.git
-cd steam-screenshot-backup
 powershell -ExecutionPolicy Bypass -File .\Backup-SteamScreenshots.ps1 -Destination "D:\Backups\Steam Screenshots"
 ```
 
-Omit `-Destination` to back up to `%USERPROFILE%\Pictures\Steam Screenshots`.
-
-## Run automatically
-
-Create a daily Task Scheduler job (adjust paths):
+Omit `-Destination` to use `%USERPROFILE%\Pictures\Steam Screenshots`. Runs are
+incremental (already-backed-up files are skipped), so scheduling it is safe:
 
 ```
-schtasks /create /tn "SteamScreenshotBackup" /tr "powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\path\to\Backup-SteamScreenshots.ps1 -Destination \"D:\Backups\Steam Screenshots\"" /sc daily /st 03:00
+schtasks /create /tn "SteamScreenshotBackup" /tr "powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\path\to\Backup-SteamScreenshots.ps1" /sc daily /st 03:00
 ```
 
-Pointing the destination at a synced folder (Syncthing, cloud drive, NAS) gets you
-off-machine backups for free.
+## What you get
 
-## How it works
-
-1. Finds your Steam install via the registry, then parses `libraryfolders.vdf`
-   to discover every library drive.
-2. Builds an appid → name map from `appmanifest_*.acf` files (instant, offline).
-3. For screenshots belonging to games you've uninstalled, queries the Steam store
-   API once per appid and caches the result in
-   `%LOCALAPPDATA%\SteamScreenshotBackup\appnames.json`. Steady-state runs make
-   zero network calls.
-4. Copies each screenshot to `<Destination>\<Game Name>\`, converting the raw
-   `YYYYMMDDHHMMSS_N` filename to `YYYY-MM-DD HH.MM.SS - N`. `N` is Steam's own
-   counter for multiple captures within the same second. File timestamps are
-   preserved, so Explorer's Date Modified column stays accurate.
+- **Real game names** â€” resolved instantly from local Steam app manifests for
+  installed games (across every library drive), with the Steam store API as a
+  fallback for uninstalled ones. Results are cached in
+  `%LOCALAPPDATA%\SteamScreenshotBackup\appnames.json`, so each game is only ever
+  looked up once â€” shared across both tools.
+- **Readable, sortable filenames** â€” `YYYY-MM-DD HH.MM.SS`, so sorting by name
+  equals sorting by capture time. If Steam records multiple shots in the same
+  second, extras get ` (2)`, ` (3)`, and so on.
+- **Every Steam account** on the machine is covered.
+- **Non-destructive** â€” Steam's own screenshot store is never touched, and file
+  timestamps are preserved on copy.
+- Point the destination at a synced folder (Syncthing, cloud drive, NAS) and you
+  get off-machine backups for free.
 
 ## Delisted games
 
@@ -74,15 +85,34 @@ an `AppID_<number>` folder. Fix them manually by adding entries to the cache fil
 { "1681430": "Some Delisted Game" }
 ```
 
-The next run picks the name up and uses it.
+The next screenshot or scan picks the name up.
+
+## Building the app from source
+
+Requires the .NET 8 SDK (`winget install Microsoft.DotNet.SDK.8`):
+
+```
+cd app
+dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+```
+
+The exe lands in `app\bin\Release\net8.0-windows\win-x64\publish\`. For a quick
+test build, `dotnet run` inside `app\` works too.
 
 ## Limitations
 
-- Backs up Steam's managed (compressed) screenshots. If you've enabled
-  *"Save an uncompressed copy"* in Steam's settings, those files already live in a
-  single folder of your choosing and don't need this script.
-- Windows only (registry lookup + Windows path conventions).
+- Backs up Steam's managed (compressed) screenshots. If you've enabled *"Save an
+  uncompressed copy"* in Steam's settings, those already live in a single folder
+  of your choosing and don't need this tool.
+- Windows only.
+
+## Repository layout
+
+```
+Backup-SteamScreenshots.ps1   PowerShell version
+app/                          Tray app (C# / .NET 8 WinForms)
+```
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT â€” see [LICENSE](LICENSE).
