@@ -1,6 +1,6 @@
-﻿# Steam Screenshot Backup
+# Steam Screenshot Backup
 
-Automatically consolidates every Steam screenshot into one folder â€” organized by
+Automatically consolidates every Steam screenshot into one folder — organized by
 **real game name** instead of appid, with filenames you can actually read.
 
 Steam buries screenshots in `userdata\<id>\760\remote\<appid>\screenshots` under
@@ -8,12 +8,12 @@ names like `20260706210532_1.jpg`. This project turns that into:
 
 ```
 Steam Screenshots/
-â”œâ”€â”€ Slay the Spire/
-â”‚   â”œâ”€â”€ 2026-04-12 13.37.15.jpg
-â”‚   â””â”€â”€ 2026-04-12 15.06.32.jpg
-â”œâ”€â”€ Yakuza Kiwami/
-â”‚   â””â”€â”€ 2025-08-25 20.46.10.jpg
-â””â”€â”€ ...
+├── Slay the Spire/
+│   ├── 2026-04-12 13.37.15.jpg
+│   └── 2026-04-12 15.06.32.jpg
+├── Yakuza Kiwami/
+│   └── 2025-08-25 20.46.10.jpg
+└── ...
 ```
 
 Two ways to use it:
@@ -23,7 +23,7 @@ Two ways to use it:
 | **Tray app** (recommended) | Set-and-forget. Watches Steam in real time and backs up each screenshot the moment you take it. |
 | **PowerShell script** | Scripters. One-shot or scheduled runs via Task Scheduler, no resident process. |
 
-Both produce identical output and share the same game-name cache â€” switch between
+Both produce identical output and share the same game-name cache — switch between
 them freely.
 
 ## Tray app
@@ -42,12 +42,12 @@ From then on:
 - The tray tooltip shows the most recent backup
 
 > **Windows SmartScreen:** the exe is unsigned, so the first run may show
-> *"Windows protected your PC."* Click **More info â†’ Run anyway** â€” or build from
+> *"Windows protected your PC."* Click **More info → Run anyway** — or build from
 > source (below) if you'd rather not trust a downloaded binary.
 
 ## PowerShell script
 
-Zero dependencies â€” Windows PowerShell 5.1+, which ships with Windows 10/11:
+Zero dependencies — Windows PowerShell 5.1+, which ships with Windows 10/11:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Backup-SteamScreenshots.ps1 -Destination "D:\Backups\Steam Screenshots"
@@ -62,16 +62,16 @@ schtasks /create /tn "SteamScreenshotBackup" /tr "powershell -ExecutionPolicy By
 
 ## What you get
 
-- **Real game names** â€” resolved instantly from local Steam app manifests for
+- **Real game names** — resolved instantly from local Steam app manifests for
   installed games (across every library drive), with the Steam store API as a
   fallback for uninstalled ones. Results are cached in
   `%LOCALAPPDATA%\SteamScreenshotBackup\appnames.json`, so each game is only ever
-  looked up once â€” shared across both tools.
-- **Readable, sortable filenames** â€” `YYYY-MM-DD HH.MM.SS`, so sorting by name
+  looked up once — shared across both tools.
+- **Readable, sortable filenames** — `YYYY-MM-DD HH.MM.SS`, so sorting by name
   equals sorting by capture time. If Steam records multiple shots in the same
   second, extras get ` (2)`, ` (3)`, and so on.
 - **Every Steam account** on the machine is covered.
-- **Non-destructive** â€” Steam's own screenshot store is never touched, and file
+- **Non-destructive** — Steam's own screenshot store is never touched, and file
   timestamps are preserved on copy.
 - Point the destination at a synced folder (Syncthing, cloud drive, NAS) and you
   get off-machine backups for free.
@@ -115,4 +115,4 @@ app/                          Tray app (C# / .NET 8 WinForms)
 
 ## License
 
-MIT â€” see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
