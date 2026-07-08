@@ -99,8 +99,9 @@ Uninstall option cleans up after itself.
 - **Right-click** the tray icon for the quick menu: Open, Back up now, Open
   backup folder, Pause watching, Start with Windows, Settings, Uninstall, Exit.
 - **Settings** covers the backup folder (with optional migration of existing
-  files), screenshot types, folder layout (with optional in-place
-  reorganization), theme, and autostart.
+  files), screenshot types, a manual high-resolution folder for when it can't be
+  auto-detected, folder layout (with optional in-place reorganization), theme,
+  and autostart.
 - **Game names** lets you fix delisted or non-Steam games without touching any
   JSON by hand.
 
@@ -109,8 +110,10 @@ Uninstall option cleans up after itself.
 Steam saves uncompressed copies only when *"Save an external copy of my
 screenshots"* is enabled (Steam Settings → In Game). The app reads Steam's
 config to find that folder automatically — including retroactively importing
-everything already in it. Screenshots taken before the option was enabled exist
-only as compressed copies, which is exactly what the Standard backup covers.
+everything already in it. If it can't be auto-detected, set the folder yourself
+in **Settings → High-resolution folder**. Screenshots taken before the option
+was enabled exist only as compressed copies, which is exactly what the Standard
+backup covers.
 
 ## PowerShell script
 
@@ -127,6 +130,7 @@ dependencies beyond Windows PowerShell 5.1 (ships with Windows 10/11):
 | `-Destination` | any folder | `%USERPROFILE%\Pictures\Steam Screenshots` |
 | `-Types` | `Standard`, `HighRes`, `Both` | `Both` |
 | `-FolderTemplate` | `{game}`, `{yyyy}\{game}`, … | `{game}` |
+| `-HighResPath` | manual external-copy folder (if not auto-detected) | *(auto only)* |
 
 Runs are incremental, so scheduling is safe:
 
