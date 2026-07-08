@@ -25,8 +25,9 @@ namespace SteamScreenshotBackup
 
         private readonly TextBox _dest;
         private readonly TextBox _highResFolder;
-        private readonly CheckBox _standard, _highRes, _autoStart, _autoRestore;
+        private readonly CheckBox _standard, _highRes, _autoStart, _autoRestore, _deleteOriginals;
         private readonly ComboBox _layout, _theme;
+        private bool _suppressDangerPrompt;   // guards the enable-confirmation loop
 
         public SettingsWindow(TrayContext app, Settings settings)
         {
@@ -39,7 +40,7 @@ namespace SteamScreenshotBackup
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(560, 628);
+            ClientSize = new Size(560, 712);
             Theme.ApplyWindow(this);
 
             int y = 20;
@@ -199,6 +200,38 @@ namespace SteamScreenshotBackup
                 AutoSize = true,
                 Location = new Point(42, y)
             });
+            y += 38;
+
+            // ----- danger zone -----
+            Controls.Add(new Label
+            {
+                Text = "DANGER ZONE",
+                Font = Theme.HeaderFont,
+                ForeColor = Theme.Error,
+                AutoSize = true,
+                Location = new Point(24, y)
+            });
+            y += 22;
+            _deleteOriginals = new CheckBox
+            {
+                Text = "Delete original Steam screenshots after import",
+                Checked = _settings.DeleteOriginals,
+                AutoSize = true,
+                Location = new Point(24, y),
+                ForeColor = Theme.Error
+            };
+            _deleteOriginals.CheckedChanged += OnDeleteOriginalsToggled;
+            Controls.Add(_deleteOriginals);
+            y += 26;
+            Controls.Add(new Label
+            {
+                Text = "Removes each original from Steam once it is safely backed up. Files go to the\n" +
+                       "Windows Recycle Bin (recoverable), not permanent deletion.",
+                Font = Theme.SmallFont,
+                ForeColor = Theme.TextDim,
+                AutoSize = true,
+                Location = new Point(42, y)
+            });
 
             // ----- footer -----
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 60, BackColor = Theme.Panel };
@@ -262,6 +295,63 @@ namespace SteamScreenshotBackup
                 _highResFolder.Text = dlg.SelectedPath;
         }
 
+        // Strict confirmation the moment the dangerous box is ticked; reverts on decline.
+        private void OnDeleteOriginalsToggled(object sender, EventArgs e)
+        {
+            if (_suppressDangerPrompt || !_deleteOriginals.Checked) return;
+            bool ok = MessageDialog.AskYesNo(
+                "DANGER \u2014 delete originals after import\n\n" +
+                "With this on, every original Steam screenshot is removed from Steam as soon as it " +
+                "is safely backed up, and Steam will no longer show those screenshots.\n\n" +
+                "Deleted files go to the Windows Recycle Bin, so you can recover them until it is " +
+                "emptied \u2014 but this still changes Steam's own screenshot folder.\n\n" +
+                "Are you sure you want to enable this?",
+                "Enable a dangerous setting");
+            if (!ok)
+            {
+                _suppressDangerPrompt = true;
+                _deleteOriginals.Checked = false;
+                _suppressDangerPrompt = false;
+            }
+        }
+
+        private void RunPurgeOriginals()
+        {
+            var progress = new Form
+            {
+                Text = "Deleting originals\u2026",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                ControlBox = false,
+                StartPosition = FormStartPosition.CenterParent,
+                ClientSize = new Size(380, 96)
+            };
+            Theme.ApplyWindow(progress);
+            var label = new Label
+            {
+                Text = "Sending imported originals to the Recycle Bin\u2026",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = Theme.Text
+            };
+            progress.Controls.Add(label);
+
+            var engine = _app.Engine;
+            progress.Shown += (s, e) => Task.Run(() =>
+            {
+                try
+                {
+                    engine.PurgeImportedOriginals((done, total) =>
+                    {
+                        try { progress.BeginInvoke(new Action(() => label.Text = $"Recycling originals\u2026 {done} / {total}")); }
+                        catch { }
+                    });
+                }
+                catch (Exception ex) { Logger.Error("Purge of originals failed: " + ex.Message); }
+                finally { try { progress.BeginInvoke(new Action(progress.Close)); } catch { } }
+            });
+            progress.ShowDialog(this);
+        }
+
         private void SaveChanges()
         {
             if (!_standard.Checked && !_highRes.Checked)
@@ -294,6 +384,8 @@ namespace SteamScreenshotBackup
             _settings.BackupHighRes = _highRes.Checked;
             _settings.HighResFolderOverride = newOverride.Length == 0 ? null : newOverride;
             _settings.AutoRestore = _autoRestore.Checked;
+            bool deleteOriginalsNewlyEnabled = _deleteOriginals.Checked && !_settings.DeleteOriginals;
+            _settings.DeleteOriginals = _deleteOriginals.Checked;
             _settings.Theme = _theme.SelectedIndex switch
             {
                 1 => ThemeMode.Light,
@@ -333,6 +425,17 @@ namespace SteamScreenshotBackup
             _settings.Save();
             Theme.SetMode(_settings.Theme);
             _app.OnSettingsChanged(destChanged || typesChanged || overrideChanged);
+
+            // Newly enabled: offer to clean up originals that were already imported.
+            if (deleteOriginalsNewlyEnabled && MessageDialog.AskYesNo(
+                    "Also delete originals that were already imported?\n\n" +
+                    "This sends every original that already has a backup to the Recycle Bin now. " +
+                    "Choose No to only delete originals of screenshots imported from here on.",
+                    "Apply to already-imported screenshots?"))
+            {
+                RunPurgeOriginals();
+            }
+
             DialogResult = DialogResult.OK;
             Close();
         }

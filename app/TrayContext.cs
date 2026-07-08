@@ -110,10 +110,22 @@ namespace SteamScreenshotBackup
             if (setup.AutoStart)
                 _autoStartItem.Checked = true;   // CheckedChanged handler writes the registry value
 
+            // The installer can pre-select the (dangerous) "delete originals after
+            // import" task; honor that choice on first run.
+            try
+            {
+                using var k = Registry.CurrentUser.OpenSubKey(@"Software\SteamScreenshotBackup");
+                if (k?.GetValue("DeleteOriginalsDefault") is int v && v == 1)
+                    _settings.DeleteOriginals = true;
+            }
+            catch { }
+
             _settings.FirstRunDone = true;
         }
 
         // ------------------------------------------------------------- actions
+
+        public void OpenMainWindow() => MainWindow.ShowWindow(this);
 
         public void BackUpNow() => RunScan(RunKind.Manual);
 

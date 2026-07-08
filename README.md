@@ -2,7 +2,11 @@
 
 Automatically consolidates every Steam screenshot — including the high-resolution
 external copies — into one organized, searchable backup with **real game names**
-and filenames you can actually read.
+and filenames you can actually read. It began as a way to rescue the screenshots
+Steam locks away in appid-numbered folders — especially older ones taken before
+Steam's "save an external copy" option existed — and grew to also organize the
+high-resolution external copies that Steam otherwise dumps, unsorted, into a
+single folder. Both stores are now watched and backed up continuously.
 
 Steam buries screenshots in `userdata\<id>\760\remote\<appid>\screenshots` under
 names like `20260706210532_1.jpg`, and it doesn't organize the uncompressed
@@ -38,15 +42,6 @@ Steam Screenshots/
 
 *The installer lets you choose whether to start with Windows and add Start Menu / Desktop shortcuts.*
 
-## Why this exists
-
-This project was originally built to find and organize screenshots taken *before*
-Steam's "save an external copy" option was ever enabled — years of shots locked
-away in appid-numbered folders. It grew when it turned out that even after
-enabling that option, Steam dumps the high-resolution copies into a single
-unsorted folder with cryptic names. Now both stores are watched, organized, and
-backed up continuously.
-
 ## Key features
 
 - **Real game names** — resolved from local Steam manifests, the Steam store API
@@ -70,6 +65,10 @@ backed up continuously.
 - **Custom folder layouts** — choose between `Game`, `Game\Year`, `Year\Game` and
   more; existing backups can be reorganized in place. Handy for markdown journals
   and personal knowledge bases.
+- **Optional Steam cleanup** — turn on the (clearly-marked, dangerous) *Delete
+  originals after import* setting and each original is removed from Steam once it's
+  safely backed up. Deleted files go to the **Windows Recycle Bin**, so they stay
+  recoverable.
 - **Network-drive friendly** — if the destination is a NAS share that drops, the
   app quietly queues work and resumes when it returns. No error spam.
 - **Dark and light themes** — or follow the Windows setting.
@@ -85,7 +84,9 @@ backed up continuously.
 1. Download `SteamScreenshotBackup-Setup-<version>.exe` from the
    [latest release](../../releases/latest).
 2. Run it. Pick an install folder (defaults to Program Files) and choose whether
-   to start with Windows and add Start Menu / Desktop shortcuts, then finish.
+   to start with Windows, add Start Menu / Desktop shortcuts, and (optionally, and
+   flagged as dangerous) delete originals after import. The main window opens
+   automatically when setup finishes.
 3. On first launch, choose your backup folder and which screenshot types to back
    up. That's the entire setup.
 
@@ -118,7 +119,9 @@ Uninstall option cleans up after itself.
 - **Settings** covers the backup folder (with optional migration of existing
   files), screenshot types, a manual high-resolution folder for when it can't be
   auto-detected, folder layout (with optional in-place reorganization), theme,
-  autostart, and whether deleted backup files are restored automatically.
+  autostart, whether deleted backup files are restored automatically, and a
+  dangerous *Delete originals after import* option (with a confirmation prompt and
+  an offer to apply it to already-imported screenshots).
 - **Game names** lets you fix delisted or non-Steam games without touching any
   JSON by hand.
 

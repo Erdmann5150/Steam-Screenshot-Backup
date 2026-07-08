@@ -17,6 +17,7 @@ namespace SteamScreenshotBackup
     {
         public int Copied;
         public int Skipped;
+        public int OriginalsDeleted;
         public HashSet<string> GamesAffected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -293,7 +294,30 @@ namespace SteamScreenshotBackup
                 run.Copied++;
                 run.GamesAffected.Add(game);
             }
+
+            // Dangerous, opt-in: remove the just-imported original (to the Recycle Bin).
+            DeleteOriginalToRecycleBin(src, dest, run);
             return true;
+        }
+
+        // Sends a successfully-imported original to the Windows Recycle Bin, but only
+        // when the backup copy is provably present and complete. Never permanent, so a
+        // mistake is always recoverable.
+        private void DeleteOriginalToRecycleBin(string src, string dest, RunResult run)
+        {
+            if (!_settings.DeleteOriginals) return;
+            try
+            {
+                if (!File.Exists(src)) return;
+                if (!File.Exists(dest) || new FileInfo(dest).Length < new FileInfo(src).Length) return;
+                RecycleBin.Delete(src);
+                if (run != null) run.OriginalsDeleted++;
+                else Logger.Log("Deleted original after import (sent to the Recycle Bin): " + Path.GetFileName(src));
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Could not delete original {Path.GetFileName(src)}: {ex.Message}");
+            }
         }
 
         private static string TypeFolder(ScreenshotType t) =>
@@ -383,7 +407,45 @@ namespace SteamScreenshotBackup
                 try { CopyOne(path, appid, type, restore, run); }
                 catch (Exception ex) { Logger.Error($"Copy failed for {path}: {ex.Message}"); }
             }
+            if (run.OriginalsDeleted > 0)
+                Logger.Log($"Deleted {run.OriginalsDeleted} imported original" +
+                           $"{(run.OriginalsDeleted == 1 ? "" : "s")} (sent to the Recycle Bin).");
             return run;
+        }
+
+        // Retroactive one-shot for "delete originals after import": sends every original
+        // that already has a verified backup to the Recycle Bin. Reports (done, total).
+        public int PurgeImportedOriginals(Action<int, int> progress = null)
+        {
+            var sources = EnumerateSources().ToList();
+            int deleted = 0, done = 0;
+            foreach (var (path, appid, type) in sources)
+            {
+                try
+                {
+                    string game = _resolver.ResolveFolderName(appid);
+                    var (ts, destName) = ConvertName(Path.GetFileName(path), type);
+                    if (destName != null)
+                    {
+                        string dest = Path.Combine(Destination, TypeFolder(type), ExpandTemplate(game, ts), destName);
+                        if (File.Exists(path) && File.Exists(dest) &&
+                            new FileInfo(dest).Length >= new FileInfo(path).Length)
+                        {
+                            RecycleBin.Delete(path);
+                            deleted++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"Could not delete original {Path.GetFileName(path)}: {ex.Message}");
+                }
+                progress?.Invoke(++done, sources.Count);
+            }
+            if (deleted > 0)
+                Logger.Log($"Retroactively deleted {deleted} imported original" +
+                           $"{(deleted == 1 ? "" : "s")} (sent to the Recycle Bin).");
+            return deleted;
         }
 
         // -------------------------------------------------- re-sync missing files
