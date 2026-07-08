@@ -24,6 +24,7 @@ namespace SteamScreenshotBackup
         private readonly Settings _settings;
 
         private readonly TextBox _dest;
+        private readonly TextBox _highResFolder;
         private readonly CheckBox _standard, _highRes, _autoStart;
         private readonly ComboBox _layout, _theme;
 
@@ -38,7 +39,7 @@ namespace SteamScreenshotBackup
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(560, 520);
+            ClientSize = new Size(560, 566);
             Theme.ApplyWindow(this);
 
             int y = 20;
@@ -96,22 +97,40 @@ namespace SteamScreenshotBackup
                 ForeColor = Theme.Text
             };
             Controls.Add(_highRes);
-            y += 26;
-            if (!_app.Engine.HighResSourceAvailable)
+            y += 30;
+
+            // Manual high-resolution folder \u2014 used when Steam's config doesn't reveal
+            // one (or to add an extra location). Placeholder shows the auto-detected path.
+            string detected = _app.Engine.AutoDetectedHighResFolder;
+            var hrCaption = new Label
             {
-                var note = new Label
-                {
-                    Text = "Steam's external-copy option looks disabled right now; no high-resolution\n" +
-                           "source folder was found. Enable it in Steam Settings > In Game.",
-                    Font = Theme.SmallFont,
-                    ForeColor = Theme.TextDim,
-                    AutoSize = true,
-                    Location = new Point(42, y)
-                };
-                Controls.Add(note);
-                y += 36;
-            }
-            y += 12;
+                Text = detected != null
+                    ? "High-resolution folder (auto-detected; set only to use a different one):"
+                    : "High-resolution folder (not auto-detected \u2014 set it here if you use external copies):",
+                Font = Theme.SmallFont,
+                ForeColor = Theme.TextDim,
+                AutoSize = true,
+                Location = new Point(42, y)
+            };
+            Controls.Add(hrCaption);
+            y += 20;
+
+            _highResFolder = new TextBox
+            {
+                Text = _settings.HighResFolderOverride ?? "",
+                Location = new Point(42, y),
+                Width = 390,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            if (detected != null) _highResFolder.PlaceholderText = detected;
+            Theme.StyleInput(_highResFolder);
+            var hrBrowse = new Button { Text = "Browse\u2026", Size = new Size(92, _highResFolder.Height + 2) };
+            hrBrowse.Location = new Point(440, y - 1);
+            Theme.StyleButton(hrBrowse);
+            hrBrowse.Click += (s, e) => BrowseHighRes();
+            Controls.Add(_highResFolder);
+            Controls.Add(hrBrowse);
+            y += 42;
 
             // ----- folder layout -----
             Section("FOLDER LAYOUT (INSIDE EACH TYPE FOLDER)");
@@ -210,6 +229,18 @@ namespace SteamScreenshotBackup
                 _dest.Text = dlg.SelectedPath;
         }
 
+        private void BrowseHighRes()
+        {
+            using var dlg = new FolderBrowserDialog
+            {
+                Description = "Choose the folder where Steam saves external (high-resolution) copies.",
+                UseDescriptionForTitle = true,
+                SelectedPath = _highResFolder.Text
+            };
+            if (dlg.ShowDialog(this) == DialogResult.OK)
+                _highResFolder.Text = dlg.SelectedPath;
+        }
+
         private void SaveChanges()
         {
             if (!_standard.Checked && !_highRes.Checked)
@@ -229,13 +260,18 @@ namespace SteamScreenshotBackup
             string oldTemplate = _settings.FolderTemplate ?? "{game}";
             string newTemplate = LayoutPresets[_layout.SelectedIndex].Template;
 
+            string oldOverride = _settings.HighResFolderOverride ?? "";
+            string newOverride = _highResFolder.Text.Trim();
+
             bool destChanged = !string.Equals(oldDest, newDest, StringComparison.OrdinalIgnoreCase);
             bool typesChanged = _standard.Checked != _settings.BackupStandard ||
                                 _highRes.Checked != _settings.BackupHighRes;
+            bool overrideChanged = !string.Equals(oldOverride, newOverride, StringComparison.OrdinalIgnoreCase);
             bool templateChanged = oldTemplate != newTemplate;
 
             _settings.BackupStandard = _standard.Checked;
             _settings.BackupHighRes = _highRes.Checked;
+            _settings.HighResFolderOverride = newOverride.Length == 0 ? null : newOverride;
             _settings.Theme = _theme.SelectedIndex switch
             {
                 1 => ThemeMode.Light,
@@ -251,7 +287,7 @@ namespace SteamScreenshotBackup
                 bool hasExisting = BackupExists(oldDest);
                 bool migrate = hasExisting && MessageDialog.AskYesNo(
                     "Move your existing backup files to the new location?\n\n" +
-                    "Choosing No leaves the old files where they are and re-copies\n" +
+                    "Choosing No leaves the old files where they are and re-copies " +
                     "everything from Steam into the new folder on the next scan.",
                     "Migrate existing backup");
                 _settings.Destination = newDest;
@@ -263,7 +299,7 @@ namespace SteamScreenshotBackup
                 _settings.FolderTemplate = newTemplate;
                 if (BackupExists(_settings.Destination) && MessageDialog.AskYesNo(
                         "Reorganize the existing backup into the new folder layout now?\n\n" +
-                        "Choosing No applies the layout to new screenshots only, and the\n" +
+                        "Choosing No applies the layout to new screenshots only, and the " +
                         "next scan may re-copy older ones into the new layout.",
                         "Reorganize backup"))
                 {
@@ -274,7 +310,7 @@ namespace SteamScreenshotBackup
 
             _settings.Save();
             Theme.SetMode(_settings.Theme);
-            _app.OnSettingsChanged(destChanged || typesChanged);
+            _app.OnSettingsChanged(destChanged || typesChanged || overrideChanged);
             DialogResult = DialogResult.OK;
             Close();
         }

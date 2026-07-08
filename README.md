@@ -70,8 +70,8 @@ backed up continuously.
 
 1. Download `SteamScreenshotBackup-Setup-<version>.exe` from the
    [latest release](../../releases/latest).
-2. Run it. Pick an install folder (defaults to Program Files), optionally add
-   Start Menu / Desktop shortcuts, and finish.
+2. Run it. Pick an install folder (defaults to Program Files) and choose whether
+   to start with Windows and add Start Menu / Desktop shortcuts, then finish.
 3. On first launch, choose your backup folder and which screenshot types to back
    up. That's the entire setup.
 

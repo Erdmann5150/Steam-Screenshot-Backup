@@ -42,8 +42,10 @@ namespace SteamScreenshotBackup
             new Regex(@"^\d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}( \(\d+\))?\.\w+$", RegexOptions.Compiled);
 
         private readonly Settings _settings;
+        private readonly string _steamPath;
         private readonly string _userdata;
-        private readonly List<string> _highResFolders;
+        private List<string> _highResFolders;
+        private List<string> _autoHighResFolders = new List<string>();
         private readonly AppNameResolver _resolver;
         private readonly BlockingCollection<(ScreenshotType Type, string Path)> _queue
             = new BlockingCollection<(ScreenshotType, string)>();
@@ -91,17 +93,40 @@ namespace SteamScreenshotBackup
         {
             _settings = settings;
 
-            string steamPath = SteamConfig.FindSteamPath()
+            _steamPath = SteamConfig.FindSteamPath()
                 ?? throw new InvalidOperationException("Steam installation not found in the registry.");
-            _userdata = Path.Combine(steamPath, "userdata");
-            _highResFolders = SteamConfig.FindHighResFolders(steamPath);
-            _resolver = new AppNameResolver(steamPath);
+            _userdata = Path.Combine(_steamPath, "userdata");
+            _resolver = new AppNameResolver(_steamPath);
+            RefreshHighResFolders();
 
             var worker = new Thread(ProcessQueue) { IsBackground = true, Name = "CopyWorker" };
             worker.Start();
         }
 
+        // Rebuilds the high-resolution source list from Steam's config plus any manual
+        // override the user set. Called at startup and whenever settings change.
+        public void RefreshHighResFolders()
+        {
+            _autoHighResFolders = SteamConfig.FindHighResFolders(_steamPath);
+
+            var combined = new List<string>(_autoHighResFolders);
+            string manual = _settings.HighResFolderOverride;
+            if (!string.IsNullOrWhiteSpace(manual) &&
+                !combined.Contains(manual, StringComparer.OrdinalIgnoreCase))
+                combined.Add(manual);
+
+            _highResFolders = combined;
+        }
+
+        // True when a high-resolution source exists at all (auto-detected or manual).
         public bool HighResSourceAvailable => _highResFolders.Count > 0;
+
+        // True only when Steam's config pointed us at a folder on its own.
+        public bool HighResAutoDetected => _autoHighResFolders.Count > 0;
+
+        // The first folder Steam's config pointed us at, for display in Settings.
+        public string AutoDetectedHighResFolder =>
+            _autoHighResFolders.Count > 0 ? _autoHighResFolders[0] : null;
 
         private string Destination => _settings.Destination;
 
@@ -146,6 +171,7 @@ namespace SteamScreenshotBackup
         // the destination moved.
         public void RestartWatching()
         {
+            RefreshHighResFolders();   // pick up a newly-set manual folder
             _stdWatcher?.Dispose();
             _stdWatcher = null;
             foreach (var w in _highResWatchers) w.Dispose();

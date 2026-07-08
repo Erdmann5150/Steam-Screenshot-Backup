@@ -434,7 +434,18 @@ namespace SteamScreenshotBackup
                     MessageDialog.Info("No log file has been written yet.");
                     return;
                 }
-                Process.Start(new ProcessStartInfo { FileName = Logger.LogFilePath, UseShellExecute = true });
+                // ".log" has no default file association on most systems, so a plain
+                // ShellExecute silently does nothing. Open it in Notepad (always present),
+                // and fall back to revealing it in Explorer if that ever fails.
+                try
+                {
+                    Process.Start(new ProcessStartInfo("notepad.exe", $"\"{Logger.LogFilePath}\"")
+                        { UseShellExecute = true });
+                }
+                catch
+                {
+                    Process.Start("explorer.exe", $"/select,\"{Logger.LogFilePath}\"");
+                }
             }
             catch (Exception ex)
             {

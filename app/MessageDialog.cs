@@ -34,13 +34,22 @@ namespace SteamScreenshotBackup
             AutoScaleMode = AutoScaleMode.Dpi;
             Theme.ApplyWindow(this);
 
+            // Measure the wrapped text at a fixed width so word-wrap and any explicit
+            // line breaks agree (AutoSize + MaximumSize together produce ragged spacing).
+            const int TextWidth = 380;
+            const TextFormatFlags MeasureFlags =
+                TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
+            Size measured = TextRenderer.MeasureText(
+                text, Font, new Size(TextWidth, int.MaxValue), MeasureFlags);
+
             var body = new Label
             {
                 Text = text,
-                AutoSize = true,
-                MaximumSize = new Size(380, 0),
+                AutoSize = false,
+                Size = new Size(Math.Min(TextWidth, measured.Width), measured.Height),
                 Location = new Point(28, 24),
-                ForeColor = Theme.Text
+                ForeColor = Theme.Text,
+                UseMnemonic = false
             };
             Controls.Add(body);
 

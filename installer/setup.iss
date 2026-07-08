@@ -30,12 +30,16 @@ PrivilegesRequiredOverridesAllowed=dialog
 OutputBaseFilename=SteamScreenshotBackup-Setup-{#AppVersion}
 SetupIconFile=..\app\Assets\app.ico
 UninstallDisplayIcon={app}\{#AppExe}
+; Clean name in "Apps & features" / Control Panel (no "version x.x.x" suffix).
+UninstallDisplayName={#AppName}
+VersionInfoVersion={#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 
 [Tasks]
+Name: "startupwindows"; Description: "Start {#AppName} automatically when I sign in to Windows"
 Name: "startmenuicon"; Description: "Create a Start Menu entry"
 Name: "desktopicon"; Description: "Create a Desktop shortcut"; Flags: unchecked
 
@@ -45,6 +49,11 @@ Source: "{#PublishDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: startmenuicon
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
+
+[Registry]
+; "Start with Windows" — writes the same per-user Run value the app's own toggle uses,
+; so the app's Settings checkbox stays in sync. Removed on uninstall.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SteamScreenshotBackup"; ValueData: """{app}\{#AppExe}"""; Tasks: startupwindows; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: postinstall nowait skipifsilent

@@ -15,6 +15,10 @@ namespace SteamScreenshotBackup
         public bool BackupStandard { get; set; } = true;
         public bool BackupHighRes { get; set; } = true;
 
+        // Optional manual location of Steam's uncompressed ("external copy") screenshots,
+        // used when auto-detection from Steam's config finds nothing. Null/empty = auto only.
+        public string HighResFolderOverride { get; set; }
+
         // Folder layout under the type folder. Tokens: {game} {yyyy} {MM} {dd}
         public string FolderTemplate { get; set; } = "{game}";
 
