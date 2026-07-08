@@ -60,7 +60,10 @@ backed up continuously.
 - **Real-time backup** — every screenshot is copied within about a second of Steam
   saving it. A catch-up scan at launch covers anything taken while the app was off.
 - **Self-healing backup** — delete a file (or a whole game folder) from the backup
-  and the app notices, logs it, and restores anything that still exists in Steam.
+  and the app notices and logs it. With automatic restore on (the default),
+  anything still in Steam is copied straight back. Prefer to stay in control? Turn
+  it off and use **Re-sync missing** to review everything in Steam that isn't in
+  your backup — grouped by game — and restore only what you pick.
 - **Searchable metadata** — the game name is injected into each backup copy
   (JPEG Title/Subject EXIF, PNG text chunks) without re-encoding a single pixel,
   so Windows Explorer search finds "Hollow Knight" wherever the files end up.
@@ -107,12 +110,15 @@ Uninstall option cleans up after itself.
   activity feed (backups, restores, deletions, warnings — all filterable), and
   every action as a button. Double-click a backup entry to reveal the file in
   Explorer.
-- **Right-click** the tray icon for the quick menu: Open, Back up now, Open
-  backup folder, Pause watching, Start with Windows, Settings, Uninstall, Exit.
+- **Right-click** the tray icon for the quick menu: Open, Back up now, Re-sync
+  missing screenshots, Open backup folder, Pause watching, Start with Windows,
+  Settings, Uninstall, Exit.
+- **Re-sync missing** lists every screenshot in Steam that isn't in your backup,
+  grouped by game, with checkboxes so you can restore all of them or just a few.
 - **Settings** covers the backup folder (with optional migration of existing
   files), screenshot types, a manual high-resolution folder for when it can't be
   auto-detected, folder layout (with optional in-place reorganization), theme,
-  and autostart.
+  autostart, and whether deleted backup files are restored automatically.
 - **Game names** lets you fix delisted or non-Steam games without touching any
   JSON by hand.
 

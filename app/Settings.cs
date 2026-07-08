@@ -19,6 +19,11 @@ namespace SteamScreenshotBackup
         // used when auto-detection from Steam's config finds nothing. Null/empty = auto only.
         public string HighResFolderOverride { get; set; }
 
+        // When true, files deleted from the backup are automatically restored from
+        // Steam (if the source still has them). When false, deletions are only logged
+        // and the user re-syncs manually from the "Re-sync missing" window.
+        public bool AutoRestore { get; set; } = true;
+
         // Folder layout under the type folder. Tokens: {game} {yyyy} {MM} {dd}
         public string FolderTemplate { get; set; } = "{game}";
 

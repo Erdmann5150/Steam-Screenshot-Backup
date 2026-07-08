@@ -25,7 +25,7 @@ namespace SteamScreenshotBackup
 
         private readonly TextBox _dest;
         private readonly TextBox _highResFolder;
-        private readonly CheckBox _standard, _highRes, _autoStart;
+        private readonly CheckBox _standard, _highRes, _autoStart, _autoRestore;
         private readonly ComboBox _layout, _theme;
 
         public SettingsWindow(TrayContext app, Settings settings)
@@ -39,7 +39,7 @@ namespace SteamScreenshotBackup
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(560, 566);
+            ClientSize = new Size(560, 628);
             Theme.ApplyWindow(this);
 
             int y = 20;
@@ -178,6 +178,27 @@ namespace SteamScreenshotBackup
                 ForeColor = Theme.Text
             };
             Controls.Add(_autoStart);
+            y += 34;
+
+            Section("DELETED-FILE PROTECTION");
+            _autoRestore = new CheckBox
+            {
+                Text = "Automatically restore files deleted from the backup",
+                Checked = _settings.AutoRestore,
+                AutoSize = true,
+                Location = new Point(24, y),
+                ForeColor = Theme.Text
+            };
+            Controls.Add(_autoRestore);
+            y += 26;
+            Controls.Add(new Label
+            {
+                Text = "When off, deletions are only logged \u2014 recover them yourself from \"Re-sync missing\".",
+                Font = Theme.SmallFont,
+                ForeColor = Theme.TextDim,
+                AutoSize = true,
+                Location = new Point(42, y)
+            });
 
             // ----- footer -----
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 60, BackColor = Theme.Panel };
@@ -272,6 +293,7 @@ namespace SteamScreenshotBackup
             _settings.BackupStandard = _standard.Checked;
             _settings.BackupHighRes = _highRes.Checked;
             _settings.HighResFolderOverride = newOverride.Length == 0 ? null : newOverride;
+            _settings.AutoRestore = _autoRestore.Checked;
             _settings.Theme = _theme.SelectedIndex switch
             {
                 1 => ThemeMode.Light,

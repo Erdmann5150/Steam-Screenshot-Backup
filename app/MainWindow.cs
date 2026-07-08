@@ -47,8 +47,8 @@ namespace SteamScreenshotBackup
 
             Text = "Steam Screenshot Backup";
             StartPosition = FormStartPosition.CenterScreen;
-            Size = new Size(880, 600);
-            MinimumSize = new Size(720, 420);
+            Size = new Size(900, 600);
+            MinimumSize = new Size(860, 420);
             AutoScaleMode = AutoScaleMode.Dpi;
 
             // ----- action bar -----
@@ -57,6 +57,8 @@ namespace SteamScreenshotBackup
             backupNow.Click += (s, e) => _app.BackUpNow();
             var openFolder = MakeButton("Open backup folder", 160);
             openFolder.Click += (s, e) => _app.OpenBackupFolder();
+            var resync = MakeButton("Re-sync\u2026", 100);
+            resync.Click += (s, e) => ResyncWindow.ShowWindow(_app.Engine);
             _pauseBtn = MakeButton("Pause watching", 140);
             _pauseBtn.Click += (s, e) => _app.SetPaused(!_app.IsPaused);
             var settings = MakeButton("Settings\u2026", 110);
@@ -64,7 +66,7 @@ namespace SteamScreenshotBackup
             var names = MakeButton("Game names\u2026", 130);
             names.Click += (s, e) => new GameNamesWindow(_app.Engine.Resolver).ShowDialog(this);
 
-            _buttons = new[] { backupNow, openFolder, _pauseBtn, settings, names };
+            _buttons = new[] { backupNow, openFolder, resync, _pauseBtn, settings, names };
             int x = 14;
             foreach (var b in _buttons)
             {
