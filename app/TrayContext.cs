@@ -40,6 +40,7 @@ namespace SteamScreenshotBackup
             _menu = new ContextMenuStrip { Renderer = Theme.MenuRenderer };
             _menu.Items.Add("Open " + AppName, null, (s, e) => MainWindow.ShowWindow(this));
             _menu.Items.Add("Back up now", null, (s, e) => BackUpNow());
+            _menu.Items.Add("Re-sync missing screenshots\u2026", null, (s, e) => ResyncWindow.ShowWindow(_engine));
             _menu.Items.Add("Open backup folder", null, (s, e) => OpenBackupFolder());
             _menu.Items.Add(new ToolStripSeparator());
 

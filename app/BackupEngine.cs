@@ -20,6 +20,19 @@ namespace SteamScreenshotBackup
         public HashSet<string> GamesAffected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
+    // A source screenshot that isn't currently in the backup (deleted from the backup,
+    // or never copied) and could be re-synced. Surfaced by the "Re-sync missing" window.
+    internal class ResyncItem
+    {
+        public string Game;
+        public ScreenshotType Type;
+        public string SourcePath;
+        public string DestPath;
+        public DateTime Timestamp;
+        public string DisplayName;   // the readable backup filename
+        public long Size;
+    }
+
     // The heart of the app. Watches both of Steam's screenshot stores, copies new
     // files into the backup structure, restores files deleted from the backup, and
     // survives the destination (e.g. a NAS share) going away temporarily.
@@ -324,13 +337,10 @@ namespace SteamScreenshotBackup
 
         // ------------------------------------------------------------- scanning
 
-        // One full pass over every enabled source. Returns what THIS run did, or
-        // null when the destination is offline.
-        public RunResult FullScan(bool restore = false)
+        // Every valid screenshot across all enabled sources. Shared by the scanner and
+        // the "missing from backup" finder so they always agree on what counts.
+        private IEnumerable<(string Path, string Appid, ScreenshotType Type)> EnumerateSources()
         {
-            if (!CheckDestinationAvailable()) return null;
-            var run = new RunResult();
-
             if (_settings.BackupStandard && Directory.Exists(_userdata))
             {
                 foreach (var user in Directory.GetDirectories(_userdata))
@@ -345,7 +355,8 @@ namespace SteamScreenshotBackup
 
                         string appid = Path.GetFileName(appDir);
                         foreach (var f in Directory.GetFiles(srcDir))   // top level only; skips thumbnails\
-                            ScanCopy(f, appid, ScreenshotType.Standard, restore, run);
+                            if (StdName.IsMatch(Path.GetFileName(f)))
+                                yield return (f, appid, ScreenshotType.Standard);
                     }
                 }
             }
@@ -356,24 +367,89 @@ namespace SteamScreenshotBackup
                     foreach (var f in Directory.GetFiles(folder))
                     {
                         var m = HighResSrcName.Match(Path.GetFileName(f));
-                        if (m.Success) ScanCopy(f, m.Groups[1].Value, ScreenshotType.HighRes, restore, run);
+                        if (m.Success) yield return (f, m.Groups[1].Value, ScreenshotType.HighRes);
                     }
             }
+        }
 
+        // One full pass over every enabled source. Returns what THIS run did, or
+        // null when the destination is offline.
+        public RunResult FullScan(bool restore = false)
+        {
+            if (!CheckDestinationAvailable()) return null;
+            var run = new RunResult();
+            foreach (var (path, appid, type) in EnumerateSources())
+            {
+                try { CopyOne(path, appid, type, restore, run); }
+                catch (Exception ex) { Logger.Error($"Copy failed for {path}: {ex.Message}"); }
+            }
             return run;
         }
 
-        private void ScanCopy(string src, string appid, ScreenshotType type, bool restore, RunResult run)
+        // -------------------------------------------------- re-sync missing files
+
+        // Source screenshots that have no counterpart in the backup right now (deleted
+        // from the backup, or not yet copied). This is the manual complement to
+        // auto-restore: the user reviews and re-syncs these per game.
+        public List<ResyncItem> FindMissingFromBackup()
         {
-            try
+            var missing = new List<ResyncItem>();
+            if (!CheckDestinationAvailable()) return missing;
+
+            foreach (var (path, appid, type) in EnumerateSources())
             {
-                if (!StdName.IsMatch(Path.GetFileName(src)) && type == ScreenshotType.Standard) return;
-                CopyOne(src, appid, type, restore, run);
+                try
+                {
+                    string game = _resolver.ResolveFolderName(appid);
+                    var (ts, destName) = ConvertName(Path.GetFileName(path), type);
+                    if (destName == null) continue;
+
+                    string dest = Path.Combine(Destination, TypeFolder(type), ExpandTemplate(game, ts), destName);
+                    if (File.Exists(dest)) continue;   // already backed up
+
+                    long size = 0;
+                    try { size = new FileInfo(path).Length; } catch { }
+                    missing.Add(new ResyncItem
+                    {
+                        Game = game, Type = type, SourcePath = path, DestPath = dest,
+                        Timestamp = ts, DisplayName = destName, Size = size
+                    });
+                }
+                catch { }
             }
-            catch (Exception ex)
+            return missing;
+        }
+
+        // Copies the selected missing items back into the backup, logging each as a
+        // restore. Reports progress as (done, total). Returns the count copied.
+        public int Resync(IReadOnlyList<ResyncItem> items, Action<int, int> progress = null)
+        {
+            int copied = 0, done = 0;
+            foreach (var it in items)
             {
-                Logger.Error($"Copy failed for {src}: {ex.Message}");
+                try
+                {
+                    if (!CheckDestinationAvailable()) break;
+                    if (File.Exists(it.SourcePath) && !File.Exists(it.DestPath))
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(it.DestPath));
+                        File.Copy(it.SourcePath, it.DestPath, true);
+                        Metadata.TagGameName(it.DestPath, it.Game);
+                        Interlocked.Increment(ref _sessionFiles);
+                        Interlocked.Add(ref _sessionBytes, new FileInfo(it.DestPath).Length);
+                        Logger.Restore($"{it.Game}  \u203A  {it.DisplayName}  [{TypeLabel(it.Type)}]", it.DestPath);
+                        copied++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Re-sync failed for {it.SourcePath}: {ex.Message}");
+                }
+                progress?.Invoke(++done, items.Count);
             }
+            if (copied > 0)
+                Logger.Log($"Re-synced {copied} file{(copied == 1 ? "" : "s")} back to the backup.");
+            return copied;
         }
 
         // -------------------------------------------------- backup folder totals
@@ -472,8 +548,12 @@ namespace SteamScreenshotBackup
             }
             else
             {
-                return;   // some unrelated file (desktop.ini etc.); not ours, don't restore
+                return;   // some unrelated file (desktop.ini etc.); not ours
             }
+
+            // Auto-restore is optional; when off, the deletion is still logged above but
+            // the user re-syncs manually from the "Re-sync missing" window.
+            if (!_settings.AutoRestore) return;
 
             if (!_resyncPending)
             {
@@ -493,9 +573,10 @@ namespace SteamScreenshotBackup
         {
             if (_disposed) return;
             if (!CheckDestinationAvailable()) return;   // offline path handles re-arm
-            // Watcher choked (buffer overflow or the root was briefly gone): re-arm
-            // and schedule a resync so nothing is missed.
+            // Watcher choked (buffer overflow or the root was briefly gone): re-arm,
+            // and schedule a resync so a missed deletion isn't lost (only if auto-restore).
             WatchDestination();
+            if (!_settings.AutoRestore) return;
             _resyncTimer ??= new Timer(_ => { _resyncPending = false; RestoreNeeded?.Invoke(); });
             _resyncTimer.Change(3000, Timeout.Infinite);
         }
