@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace SteamScreenshotBackup
 {
@@ -13,9 +14,9 @@ namespace SteamScreenshotBackup
         public string Message { get; }
         public string FilePath { get; }   // the file involved, when the entry is about one
 
-        public LogEntry(LogLevel level, string message, string filePath = null)
+        public LogEntry(LogLevel level, string message, string filePath = null, DateTime? time = null)
         {
-            Time = DateTime.Now;
+            Time = time ?? DateTime.Now;
             Level = level;
             Message = message;
             FilePath = filePath;
@@ -24,7 +25,9 @@ namespace SteamScreenshotBackup
 
     // Application-wide log: keeps a bounded in-memory list for the activity window,
     // and appends to a size-rotated file so disk usage stays capped no matter how
-    // long the app runs.
+    // long the app runs. On first use it loads the recent tail of the log file so the
+    // activity window reflects prior sessions (not just the current one), keeping the
+    // UI and the file in agreement.
     internal static class Logger
     {
         private const int MaxEntries = 1000;            // in-memory cap for the UI
@@ -33,6 +36,9 @@ namespace SteamScreenshotBackup
 
         private static readonly object Lock = new object();
         private static readonly List<LogEntry> Entries = new List<LogEntry>();
+        private static readonly Regex LineRx =
+            new Regex(@"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[([A-Za-z]+)\s*\]\s+(.*)$", RegexOptions.Compiled);
+        private static bool _loaded;
 
         public static string LogFilePath => Path.Combine(Settings.Dir, "app.log");
 
@@ -48,7 +54,11 @@ namespace SteamScreenshotBackup
 
         public static LogEntry[] Snapshot()
         {
-            lock (Lock) return Entries.ToArray();
+            lock (Lock)
+            {
+                EnsureLoaded();
+                return Entries.ToArray();
+            }
         }
 
         private static void Write(LogLevel level, string message, string filePath = null)
@@ -56,6 +66,7 @@ namespace SteamScreenshotBackup
             var entry = new LogEntry(level, message, filePath);
             lock (Lock)
             {
+                EnsureLoaded();   // fold in the file's history before this session's first entry
                 Entries.Add(entry);
                 if (Entries.Count > MaxEntries) Entries.RemoveRange(0, Entries.Count - MaxEntries);
 
@@ -69,6 +80,30 @@ namespace SteamScreenshotBackup
                 catch { }   // logging must never take the app down
             }
             Added?.Invoke(entry);
+        }
+
+        // Reads the tail of the current log file back into memory so the activity window
+        // shows history from earlier runs, matching what's on disk. Runs once, under Lock.
+        private static void EnsureLoaded()
+        {
+            if (_loaded) return;
+            _loaded = true;
+            try
+            {
+                if (!File.Exists(LogFilePath)) return;
+                string[] lines = File.ReadAllLines(LogFilePath);
+                int start = Math.Max(0, lines.Length - MaxEntries);
+                for (int i = start; i < lines.Length; i++)
+                {
+                    var m = LineRx.Match(lines[i]);
+                    if (!m.Success) continue;   // skip blank / wrapped lines
+                    if (!DateTime.TryParse(m.Groups[1].Value, out var t)) t = DateTime.Now;
+                    if (!Enum.TryParse<LogLevel>(m.Groups[2].Value, ignoreCase: true, out var level))
+                        level = LogLevel.Info;
+                    Entries.Add(new LogEntry(level, m.Groups[3].Value, null, t));
+                }
+            }
+            catch { }
         }
 
         // app.log -> app.log.1 -> app.log.2 -> app.log.3 -> deleted.

@@ -36,11 +36,11 @@ Steam Screenshots/
   <img src="docs/img/tray-menu.png" alt="Right-click tray menu" width="34%">
 </p>
 
-*Left: Settings — backup folder, screenshot types (with a manual high-resolution folder), folder layout, theme, and startup. Right: the right-click tray menu for quick actions.*
+*Left: Settings — backup folder, screenshot types, a manual high-resolution folder, folder layout, theme, popup notifications, startup, deleted-file protection, and the dangerous "delete originals after import" option. Right: the right-click tray menu (left-clicking the icon toggles the window).*
 
-![The installer's task selection: start with Windows, Start Menu entry, and Desktop shortcut](docs/img/installer.png)
+![The installer's task selection page](docs/img/installer.png)
 
-*The installer lets you choose whether to start with Windows and add Start Menu / Desktop shortcuts.*
+*The installer lets you choose startup, shortcuts, popup notifications, and (dangerous) delete-originals-after-import; the main window opens automatically when setup finishes.*
 
 ## Key features
 
