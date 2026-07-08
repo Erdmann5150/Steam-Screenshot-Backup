@@ -24,6 +24,10 @@ namespace SteamScreenshotBackup
         // and the user re-syncs manually from the "Re-sync missing" window.
         public bool AutoRestore { get; set; } = true;
 
+        // DANGEROUS: when true, an original Steam screenshot is sent to the Windows
+        // Recycle Bin once it has been successfully imported into the backup.
+        public bool DeleteOriginals { get; set; } = false;
+
         // Folder layout under the type folder. Tokens: {game} {yyyy} {MM} {dd}
         public string FolderTemplate { get; set; } = "{game}";
 

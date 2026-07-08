@@ -1,10 +1,10 @@
 ; Inno Setup script for Steam Screenshot Backup.
 ; Build with build.ps1 at the repository root (it publishes the exe first and
 ; passes the version in), or manually:
-;   ISCC.exe setup.iss /DAppVersion=3.0.1 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
+;   ISCC.exe setup.iss /DAppVersion=3.2.0 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
 
 #ifndef AppVersion
-  #define AppVersion "3.0.1"
+  #define AppVersion "3.2.0"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\app\bin\Release\net8.0-windows\win-x64\publish"
@@ -38,10 +38,15 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 
+[Messages]
+; Drop the redundant instruction line on the tasks page for a cleaner flow.
+SelectTasksLabel2=
+
 [Tasks]
 Name: "startupwindows"; Description: "Start {#AppName} automatically when I sign in to Windows"
 Name: "startmenuicon"; Description: "Create a Start Menu entry"
 Name: "desktopicon"; Description: "Create a Desktop shortcut"; Flags: unchecked
+Name: "deleteoriginals"; Description: "Delete original Steam screenshots after import (dangerous, sends them to the Recycle Bin)"; Flags: unchecked
 
 [Files]
 Source: "{#PublishDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -54,9 +59,12 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 ; "Start with Windows" — writes the same per-user Run value the app's own toggle uses,
 ; so the app's Settings checkbox stays in sync. Removed on uninstall.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SteamScreenshotBackup"; ValueData: """{app}\{#AppExe}"""; Tasks: startupwindows; Flags: uninsdeletevalue
+; The app reads this marker on first run to pre-enable "delete originals after import".
+Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "DeleteOriginalsDefault"; ValueData: 1; Tasks: deleteoriginals; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [Run]
-Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: postinstall nowait skipifsilent
+; --show opens the main window after install instead of only landing in the tray.
+Filename: "{app}\{#AppExe}"; Parameters: "--show"; Description: "Launch {#AppName}"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
 ; Stop the running tray app so its exe can be removed.
