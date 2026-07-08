@@ -28,6 +28,11 @@
     Folder layout inside each type folder. Tokens: {game} {yyyy} {MM} {dd}
     Default: {game}
 
+.PARAMETER HighResPath
+    Manual folder for Steam's uncompressed ("external copy") screenshots, used in
+    addition to any auto-detected from Steam's config. Set this if auto-detection
+    finds nothing. Mirrors the tray app's high-resolution folder override.
+
 .EXAMPLE
     .\Backup-SteamScreenshots.ps1 -Destination "D:\Backups\Steam Screenshots" -Types Both
 
@@ -38,7 +43,11 @@ param(
     [string]$Destination = (Join-Path $env:USERPROFILE 'Pictures\Steam Screenshots'),
     [ValidateSet('Standard', 'HighRes', 'Both')]
     [string]$Types = 'Both',
-    [string]$FolderTemplate = '{game}'
+    [string]$FolderTemplate = '{game}',
+    # Manual location of Steam's uncompressed ("external copy") screenshots, used in
+    # addition to whatever is auto-detected from Steam's config. Mirrors the tray
+    # app's high-resolution folder override.
+    [string]$HighResPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -238,6 +247,8 @@ if ($Types -in 'HighRes', 'Both') {
             if ($p -and ($hrFolders -notcontains $p)) { $hrFolders += $p }
         }
     }
+    # Manual override (mirrors the tray app), used on top of anything auto-detected.
+    if ($HighResPath -and ($hrFolders -notcontains $HighResPath)) { $hrFolders += $HighResPath }
 
     foreach ($folder in $hrFolders) {
         if (-not (Test-Path $folder)) { continue }
