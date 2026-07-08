@@ -1,0 +1,14 @@
+# Build output
+bin/
+obj/
+dist/
+
+# OS / IDE noise
+Thumbs.db
+desktop.ini
+*.user
+.vs/
+
+# Local snapshots
+*.7z
+*.zip
