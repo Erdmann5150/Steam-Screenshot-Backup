@@ -46,6 +46,7 @@ SelectTasksLabel2=
 Name: "startupwindows"; Description: "Start {#AppName} automatically when I sign in to Windows"
 Name: "startmenuicon"; Description: "Create a Start Menu entry"
 Name: "desktopicon"; Description: "Create a Desktop shortcut"; Flags: unchecked
+Name: "nonotifications"; Description: "Turn off popup notifications"; Flags: unchecked
 Name: "deleteoriginals"; Description: "Delete original Steam screenshots after import (dangerous, sends them to the Recycle Bin)"; Flags: unchecked
 
 [Files]
@@ -59,8 +60,9 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 ; "Start with Windows" — writes the same per-user Run value the app's own toggle uses,
 ; so the app's Settings checkbox stays in sync. Removed on uninstall.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SteamScreenshotBackup"; ValueData: """{app}\{#AppExe}"""; Tasks: startupwindows; Flags: uninsdeletevalue
-; The app reads this marker on first run to pre-enable "delete originals after import".
+; The app reads these markers on first run to pre-apply the matching settings.
 Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "DeleteOriginalsDefault"; ValueData: 1; Tasks: deleteoriginals; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "NotificationsOffDefault"; ValueData: 1; Tasks: nonotifications; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [Run]
 ; --show opens the main window after install instead of only landing in the tray.
@@ -84,4 +86,17 @@ var
 begin
   Exec(ExpandConstant('{cmd}'), '/c taskkill /im {#AppExe} /f', '', SW_HIDE, ewWaitUntilTerminated, R);
   Result := '';
+end;
+
+// Extra explicit confirmation when the dangerous "delete originals" task is selected.
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = wpSelectTasks then
+    if WizardIsTaskSelected('deleteoriginals') then
+      if MsgBox('DANGER: "Delete original Steam screenshots after import" is selected.'#13#10#13#10 +
+                'This removes your original screenshots from Steam after they are backed up ' +
+                '(they go to the Recycle Bin, but Steam will no longer show them).'#13#10#13#10 +
+                'Are you sure you want to enable this?', mbConfirmation, MB_YESNO) = IDNO then
+        Result := False;
 end;

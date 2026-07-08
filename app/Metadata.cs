@@ -6,13 +6,16 @@ using System.Text;
 namespace SteamScreenshotBackup
 {
     // Injects the resolved game name into image metadata so backups are searchable
-    // in Windows Explorer wherever they end up.
+    // in Windows Explorer wherever they end up. Verified against the Windows property
+    // system (System.Title / System.Subject / System.Keywords):
     //
-    //  - JPEG: a hand-built EXIF APP1 segment (ImageDescription, XPTitle, XPSubject)
-    //    inserted right after the SOI marker. The compressed image data is never
-    //    touched, so this is completely lossless.
-    //  - PNG:  tEXt chunks (Title / Description) inserted after the IHDR chunk.
+    //  - JPEG: a hand-built EXIF APP1 segment (ImageDescription, XPTitle, XPSubject).
+    //  - PNG:  an XMP packet in an iTXt chunk (dc:title, dc:subject). Windows does NOT
+    //          read PNG tEXt keywords into its property system, so XMP is required; a
+    //          plain-text tEXt Title is also written for non-Windows tools.
     //
+    // Both paths only insert metadata segments \u2014 the compressed image data is never
+    // re-encoded, so tagging is lossless \u2014 and the file's timestamps are preserved.
     // All failures are logged and swallowed: a backup without metadata is still a
     // backup, and this must never break the copy pipeline.
     internal static class Metadata
@@ -21,9 +24,28 @@ namespace SteamScreenshotBackup
         {
             try
             {
+                var fi = new FileInfo(filePath);
+                DateTime created = fi.CreationTimeUtc, written = fi.LastWriteTimeUtc;
+
                 string ext = Path.GetExtension(filePath).ToLowerInvariant();
-                if (ext == ".jpg" || ext == ".jpeg") TagJpeg(filePath, gameName);
-                else if (ext == ".png") TagPng(filePath, gameName);
+                bool changed = ext switch
+                {
+                    ".jpg" or ".jpeg" => TagJpeg(filePath, gameName),
+                    ".png" => TagPng(filePath, gameName),
+                    _ => false
+                };
+
+                // Keep the capture/backup timestamps; writing metadata would otherwise
+                // stamp the file with "now".
+                if (changed)
+                {
+                    try
+                    {
+                        File.SetCreationTimeUtc(filePath, created);
+                        File.SetLastWriteTimeUtc(filePath, written);
+                    }
+                    catch { }
+                }
             }
             catch (Exception ex)
             {
@@ -31,22 +53,56 @@ namespace SteamScreenshotBackup
             }
         }
 
+        // True if the file already carries our game-name metadata (used by the backfill
+        // so it doesn't rewrite files that are already tagged). Reads only the header,
+        // where we always place the metadata, so it stays cheap.
+        public static bool HasGameNameMetadata(string filePath)
+        {
+            try
+            {
+                string ext = Path.GetExtension(filePath).ToLowerInvariant();
+                byte[] head = ReadHead(filePath, 65536);
+                if (ext is ".jpg" or ".jpeg") return HasExifSegment(head);
+                if (ext == ".png") return IndexOfSequence(head, Encoding.ASCII.GetBytes("XML:com.adobe.xmp")) >= 0;
+            }
+            catch { }
+            return false;
+        }
+
+        private static byte[] ReadHead(string path, int max)
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            int len = (int)Math.Min(max, fs.Length);
+            byte[] buf = new byte[len];
+            int read = 0;
+            while (read < len)
+            {
+                int n = fs.Read(buf, read, len - read);
+                if (n <= 0) break;
+                read += n;
+            }
+            return read == len ? buf : buf[..read];
+        }
+
         // ---------------------------------------------------------------- JPEG
 
-        private static void TagJpeg(string path, string gameName)
+        private static bool TagJpeg(string path, string gameName)
         {
             byte[] file = File.ReadAllBytes(path);
-            if (file.Length < 4 || file[0] != 0xFF || file[1] != 0xD8) return;   // not a JPEG
+            if (file.Length < 4 || file[0] != 0xFF || file[1] != 0xD8) return false;   // not a JPEG
 
             // If the file already carries an EXIF APP1 block, leave it alone rather
             // than risk clobbering existing metadata (Steam's JPEGs have none).
-            if (HasExifSegment(file)) return;
+            if (HasExifSegment(file)) return false;
 
             byte[] app1 = BuildExifApp1(gameName);
-            using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
-            fs.Write(file, 0, 2);                    // SOI
-            fs.Write(app1, 0, app1.Length);          // our EXIF
-            fs.Write(file, 2, file.Length - 2);      // everything else, byte-identical
+            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                fs.Write(file, 0, 2);                    // SOI
+                fs.Write(app1, 0, app1.Length);          // our EXIF
+                fs.Write(file, 2, file.Length - 2);      // everything else, byte-identical
+            }
+            return true;
         }
 
         private static bool HasExifSegment(byte[] f)
@@ -67,7 +123,7 @@ namespace SteamScreenshotBackup
 
         // Minimal EXIF: little-endian TIFF with one IFD holding ImageDescription
         // (ASCII), XPTitle and XPSubject (UTF-16LE byte arrays, the fields Windows
-        // Explorer surfaces as Title / Subject).
+        // Explorer surfaces as Title / Subject). Tags must be in ascending order.
         private static byte[] BuildExifApp1(string text)
         {
             byte[] ascii = Encoding.ASCII.GetBytes(text.Replace('\uFFFD', '?') + "\0");
@@ -122,31 +178,66 @@ namespace SteamScreenshotBackup
 
         // ----------------------------------------------------------------- PNG
 
-        private static void TagPng(string path, string gameName)
+        private static bool TagPng(string path, string gameName)
         {
             byte[] file = File.ReadAllBytes(path);
-            if (file.Length < 33 || file[1] != 'P' || file[2] != 'N' || file[3] != 'G') return;
+            if (file.Length < 33 || file[1] != 'P' || file[2] != 'N' || file[3] != 'G') return false;
 
-            // Skip if we (or anything else) already wrote a Title chunk.
-            if (IndexOfSequence(file, Encoding.ASCII.GetBytes("tEXtTitle\0")) >= 0) return;
+            // Skip if our XMP is already present.
+            if (IndexOfSequence(file, Encoding.ASCII.GetBytes("XML:com.adobe.xmp")) >= 0) return false;
 
             int ihdrEnd = 8 + 4 + 4 + 13 + 4;   // signature + IHDR length/type/data/crc
-            byte[] title = BuildTextChunk("Title", gameName);
+            byte[] xmp = BuildXmpItxtChunk(gameName);           // what Windows actually reads
+            byte[] title = BuildTextChunk("Title", gameName);   // tEXt for other tools
             byte[] desc = BuildTextChunk("Description", "Steam screenshot from " + gameName);
 
-            using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
-            fs.Write(file, 0, ihdrEnd);
-            fs.Write(title, 0, title.Length);
-            fs.Write(desc, 0, desc.Length);
-            fs.Write(file, ihdrEnd, file.Length - ihdrEnd);
+            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                fs.Write(file, 0, ihdrEnd);
+                fs.Write(xmp, 0, xmp.Length);
+                fs.Write(title, 0, title.Length);
+                fs.Write(desc, 0, desc.Length);
+                fs.Write(file, ihdrEnd, file.Length - ihdrEnd);
+            }
+            return true;
+        }
+
+        // An "XML:com.adobe.xmp" iTXt chunk carrying dc:title and dc:subject. Windows
+        // maps dc:title -> System.Title and dc:subject -> System.Keywords (Tags).
+        private static byte[] BuildXmpItxtChunk(string game)
+        {
+            string g = System.Security.SecurityElement.Escape(game) ?? game;
+            string xmp =
+                "<?xpacket begin=\"\uFEFF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>" +
+                "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">" +
+                "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">" +
+                "<rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">" +
+                "<dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">" + g + "</rdf:li></rdf:Alt></dc:title>" +
+                "<dc:subject><rdf:Bag><rdf:li>" + g + "</rdf:li></rdf:Bag></dc:subject>" +
+                "</rdf:Description></rdf:RDF></x:xmpmeta>" +
+                "<?xpacket end=\"w\"?>";
+
+            using var data = new MemoryStream();
+            data.Write(Encoding.ASCII.GetBytes("XML:com.adobe.xmp"));
+            data.WriteByte(0);   // keyword null terminator
+            data.WriteByte(0);   // compression flag = uncompressed
+            data.WriteByte(0);   // compression method
+            data.WriteByte(0);   // empty language tag + null
+            data.WriteByte(0);   // empty translated keyword + null
+            data.Write(Encoding.UTF8.GetBytes(xmp));
+            return BuildChunk("iTXt", data.ToArray());
         }
 
         private static byte[] BuildTextChunk(string keyword, string text)
         {
             // tEXt payload is Latin-1; degrade unmappable characters to '?'.
             byte[] payload = Encoding.Latin1.GetBytes(keyword + "\0" + text);
-            byte[] type = Encoding.ASCII.GetBytes("tEXt");
+            return BuildChunk("tEXt", payload);
+        }
 
+        private static byte[] BuildChunk(string typeName, byte[] payload)
+        {
+            byte[] type = Encoding.ASCII.GetBytes(typeName);
             using var ms = new MemoryStream();
             ms.WriteByte((byte)(payload.Length >> 24));
             ms.WriteByte((byte)(payload.Length >> 16));

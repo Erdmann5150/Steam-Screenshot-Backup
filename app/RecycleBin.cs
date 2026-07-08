@@ -17,5 +17,14 @@ namespace SteamScreenshotBackup
                 RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);
             return true;
         }
+
+        // Sends a whole directory tree to the Recycle Bin.
+        public static bool DeleteDirectory(string path)
+        {
+            if (!Directory.Exists(path)) return true;
+            FileSystem.DeleteDirectory(path, UIOption.OnlyErrorDialogs,
+                RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);
+            return true;
+        }
     }
 }

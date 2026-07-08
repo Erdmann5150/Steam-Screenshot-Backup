@@ -25,7 +25,7 @@ namespace SteamScreenshotBackup
 
         private readonly TextBox _dest;
         private readonly TextBox _highResFolder;
-        private readonly CheckBox _standard, _highRes, _autoStart, _autoRestore, _deleteOriginals;
+        private readonly CheckBox _standard, _highRes, _autoStart, _autoRestore, _deleteOriginals, _showNotifications;
         private readonly ComboBox _layout, _theme;
         private bool _suppressDangerPrompt;   // guards the enable-confirmation loop
 
@@ -40,7 +40,7 @@ namespace SteamScreenshotBackup
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(560, 712);
+            ClientSize = new Size(560, 752);
             Theme.ApplyWindow(this);
 
             int y = 20;
@@ -167,7 +167,18 @@ namespace SteamScreenshotBackup
                 _ => 0
             };
             Controls.Add(_theme);
-            y += 44;
+            y += 40;
+
+            _showNotifications = new CheckBox
+            {
+                Text = "Show popup notifications",
+                Checked = _settings.ShowNotifications,
+                AutoSize = true,
+                Location = new Point(24, y),
+                ForeColor = Theme.Text
+            };
+            Controls.Add(_showNotifications);
+            y += 36;
 
             Section("STARTUP");
             _autoStart = new CheckBox
@@ -299,14 +310,25 @@ namespace SteamScreenshotBackup
         private void OnDeleteOriginalsToggled(object sender, EventArgs e)
         {
             if (_suppressDangerPrompt || !_deleteOriginals.Checked) return;
-            bool ok = MessageDialog.AskYesNo(
-                "DANGER \u2014 delete originals after import\n\n" +
-                "With this on, every original Steam screenshot is removed from Steam as soon as it " +
-                "is safely backed up, and Steam will no longer show those screenshots.\n\n" +
-                "Deleted files go to the Windows Recycle Bin, so you can recover them until it is " +
-                "emptied \u2014 but this still changes Steam's own screenshot folder.\n\n" +
-                "Are you sure you want to enable this?",
-                "Enable a dangerous setting");
+
+            // Two explicit confirmations for this irreversible-feeling, dangerous choice.
+            bool ok =
+                MessageDialog.AskYesNo(
+                    "DANGER \u2014 delete originals after import\n\n" +
+                    "With this on, every original Steam screenshot is removed from Steam as soon as it " +
+                    "is safely backed up, and Steam will no longer show those screenshots.\n\n" +
+                    "Deleted files go to the Windows Recycle Bin, so you can recover them until it is " +
+                    "emptied \u2014 but this still changes Steam's own screenshot folder.\n\n" +
+                    "Are you sure you want to enable this?",
+                    "Enable a dangerous setting")
+                &&
+                MessageDialog.AskYesNo(
+                    "Final confirmation.\n\n" +
+                    "You are enabling automatic deletion of your original Steam screenshots after they " +
+                    "are backed up. This changes Steam's own files.\n\n" +
+                    "Do you explicitly confirm you want this?",
+                    "Are you absolutely sure?");
+
             if (!ok)
             {
                 _suppressDangerPrompt = true;
@@ -352,6 +374,47 @@ namespace SteamScreenshotBackup
             progress.ShowDialog(this);
         }
 
+        private bool TypeBackupExists(ScreenshotType type)
+        {
+            try
+            {
+                string root = Path.Combine(_settings.Destination,
+                    type == ScreenshotType.Standard ? BackupEngine.StandardFolder : BackupEngine.HighResFolder);
+                return Directory.Exists(root) &&
+                       Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Any();
+            }
+            catch { return false; }
+        }
+
+        private void RunTypeDelete(ScreenshotType type)
+        {
+            var progress = new Form
+            {
+                Text = "Deleting backups\u2026",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                ControlBox = false,
+                StartPosition = FormStartPosition.CenterParent,
+                ClientSize = new Size(400, 96)
+            };
+            Theme.ApplyWindow(progress);
+            progress.Controls.Add(new Label
+            {
+                Text = $"Sending {BackupEngine.TypeLabel(type)} backups to the Recycle Bin\u2026",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = Theme.Text
+            });
+
+            var engine = _app.Engine;
+            progress.Shown += (s, e) => Task.Run(() =>
+            {
+                try { engine.DeleteTypeBackups(type); }
+                catch (Exception ex) { Logger.Error("Type-backup delete failed: " + ex.Message); }
+                finally { try { progress.BeginInvoke(new Action(progress.Close)); } catch { } }
+            });
+            progress.ShowDialog(this);
+        }
+
         private void SaveChanges()
         {
             if (!_standard.Checked && !_highRes.Checked)
@@ -380,10 +443,16 @@ namespace SteamScreenshotBackup
             bool overrideChanged = !string.Equals(oldOverride, newOverride, StringComparison.OrdinalIgnoreCase);
             bool templateChanged = oldTemplate != newTemplate;
 
+            // Types being switched off (captured before the settings are overwritten) so
+            // we can offer to clean up the now-unwanted backups.
+            bool standardTurnedOff = _settings.BackupStandard && !_standard.Checked;
+            bool highResTurnedOff = _settings.BackupHighRes && !_highRes.Checked;
+
             _settings.BackupStandard = _standard.Checked;
             _settings.BackupHighRes = _highRes.Checked;
             _settings.HighResFolderOverride = newOverride.Length == 0 ? null : newOverride;
             _settings.AutoRestore = _autoRestore.Checked;
+            _settings.ShowNotifications = _showNotifications.Checked;
             bool deleteOriginalsNewlyEnabled = _deleteOriginals.Checked && !_settings.DeleteOriginals;
             _settings.DeleteOriginals = _deleteOriginals.Checked;
             _settings.Theme = _theme.SelectedIndex switch
@@ -425,6 +494,19 @@ namespace SteamScreenshotBackup
             _settings.Save();
             Theme.SetMode(_settings.Theme);
             _app.OnSettingsChanged(destChanged || typesChanged || overrideChanged);
+
+            // Turned a screenshot type off: offer to remove its now-unwanted backups.
+            if (standardTurnedOff && TypeBackupExists(ScreenshotType.Standard) && MessageDialog.AskYesNo(
+                    "You turned off Standard screenshots. Delete the existing Standard backup files?\n\n" +
+                    "They will be sent to the Windows Recycle Bin (recoverable). Choose No to keep them.",
+                    "Delete Standard backups?"))
+                RunTypeDelete(ScreenshotType.Standard);
+
+            if (highResTurnedOff && TypeBackupExists(ScreenshotType.HighRes) && MessageDialog.AskYesNo(
+                    "You turned off High-resolution screenshots. Delete the existing High Resolution backup files?\n\n" +
+                    "They will be sent to the Windows Recycle Bin (recoverable). Choose No to keep them.",
+                    "Delete High Resolution backups?"))
+                RunTypeDelete(ScreenshotType.HighRes);
 
             // Newly enabled: offer to clean up originals that were already imported.
             if (deleteOriginalsNewlyEnabled && MessageDialog.AskYesNo(

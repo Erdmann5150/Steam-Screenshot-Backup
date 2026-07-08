@@ -69,6 +69,7 @@ namespace SteamScreenshotBackup
         private FileSystemWatcher _destWatcher;
         private Timer _resyncTimer;
         private Timer _offlineRetryTimer;
+        private Timer _unsuppressTimer;
 
         private volatile bool _paused;
         private volatile bool _offline;
@@ -544,6 +545,70 @@ namespace SteamScreenshotBackup
             return (games.Count, files, bytes);
         }
 
+        // One-time: add searchable game-name metadata to existing backups that predate
+        // the metadata fix (older PNGs especially). Runs in the background; already-
+        // tagged files are skipped with a cheap header check.
+        public int BackfillMetadata()
+        {
+            int tagged = 0;
+            try
+            {
+                foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
+                {
+                    string root = Path.Combine(Destination, typeFolder);
+                    if (!Directory.Exists(root)) continue;
+                    foreach (var f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                    {
+                        if (_disposed) return tagged;
+                        string ext = Path.GetExtension(f).ToLowerInvariant();
+                        if (ext is not ".jpg" and not ".jpeg" and not ".png") continue;
+                        if (!BackupName.IsMatch(Path.GetFileName(f))) continue;
+                        if (Metadata.HasGameNameMetadata(f)) continue;
+                        string game = ExtractGameFromRelPath(Path.GetRelativePath(root, f));
+                        if (game == null) continue;
+                        Metadata.TagGameName(f, game);
+                        tagged++;
+                    }
+                }
+            }
+            catch (Exception ex) { Logger.Warn("Metadata backfill error: " + ex.Message); }
+            if (tagged > 0)
+                Logger.Log($"Added searchable metadata to {tagged} existing backup file{(tagged == 1 ? "" : "s")}.");
+            return tagged;
+        }
+
+        // Sends an entire screenshot-type backup tree (Standard / High Resolution) to
+        // the Recycle Bin \u2014 used when the user turns that type off and opts to clean up.
+        // Dest-watcher events are suppressed so it isn't mistaken for a manual deletion.
+        public int DeleteTypeBackups(ScreenshotType type)
+        {
+            string root = Path.Combine(Destination, TypeFolder(type));
+            if (!Directory.Exists(root)) return 0;
+
+            int files = 0;
+            try { files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Count(); }
+            catch { }
+
+            _suppressDestEvents = true;
+            try
+            {
+                RecycleBin.DeleteDirectory(root);
+                Logger.Log($"Deleted {files} {TypeLabel(type)} backup file{(files == 1 ? "" : "s")} " +
+                           "(sent to the Recycle Bin).");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Could not delete {TypeLabel(type)} backups: {ex.Message}");
+            }
+            finally
+            {
+                // Re-enable dest events after a beat to swallow trailing delete notifications.
+                _unsuppressTimer ??= new Timer(_ => _suppressDestEvents = false);
+                _unsuppressTimer.Change(3000, Timeout.Infinite);
+            }
+            return files;
+        }
+
         // Given a path relative to a type folder, find the {game} segment using the
         // active template (e.g. template "{yyyy}\{game}" puts the game second).
         private string ExtractGameFromRelPath(string rel)
@@ -849,6 +914,7 @@ namespace SteamScreenshotBackup
             _destWatcher?.Dispose();
             _resyncTimer?.Dispose();
             _offlineRetryTimer?.Dispose();
+            _unsuppressTimer?.Dispose();
             _queue.CompleteAdding();
         }
     }

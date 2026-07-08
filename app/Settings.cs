@@ -28,6 +28,12 @@ namespace SteamScreenshotBackup
         // Recycle Bin once it has been successfully imported into the backup.
         public bool DeleteOriginals { get; set; } = false;
 
+        // Show tray popup (balloon) notifications for backups, restores, etc.
+        public bool ShowNotifications { get; set; } = true;
+
+        // Set once existing backups have been given searchable metadata (one-time).
+        public bool MetadataBackfilled { get; set; }
+
         // Folder layout under the type folder. Tokens: {game} {yyyy} {MM} {dd}
         public string FolderTemplate { get; set; } = "{game}";
 

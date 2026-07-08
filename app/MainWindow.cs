@@ -35,10 +35,25 @@ namespace SteamScreenshotBackup
                 _open = new MainWindow(app);
                 _open.Show();
             }
+            else if (!_open.Visible)
+            {
+                _open.Show();
+            }
             if (_open.WindowState == FormWindowState.Minimized)
                 _open.WindowState = FormWindowState.Normal;
             _open.Activate();
             _open.BringToFront();
+        }
+
+        // Left-clicking the tray icon toggles the main window: hide it when it's up,
+        // show/restore it otherwise.
+        public static void ToggleWindow(TrayContext app)
+        {
+            if (_open != null && !_open.IsDisposed && _open.Visible &&
+                _open.WindowState != FormWindowState.Minimized)
+                _open.Hide();
+            else
+                ShowWindow(app);
         }
 
         private MainWindow(TrayContext app)
@@ -129,6 +144,17 @@ namespace SteamScreenshotBackup
             close.Location = new Point(_bottom.Width - close.Width - 14, 12);
             close.Click += (s, e) => Close();
             _bottom.Controls.Add(close);
+
+            // Subtle version label, tucked to the right just before Close.
+            var version = new Label
+            {
+                Text = "v" + Application.ProductVersion.Split('+')[0],
+                AutoSize = true,
+                Font = Theme.SmallFont,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Location = new Point(close.Left - 62, 20)
+            };
+            _bottom.Controls.Add(version);
 
             // ----- activity list -----
             _list = new ListView

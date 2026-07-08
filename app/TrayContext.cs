@@ -68,7 +68,7 @@ namespace SteamScreenshotBackup
             };
             _tray.MouseClick += (s, e) =>
             {
-                if (e.Button == MouseButtons.Left) MainWindow.ShowWindow(this);
+                if (e.Button == MouseButtons.Left) MainWindow.ToggleWindow(this);
             };
 
             try
@@ -87,15 +87,31 @@ namespace SteamScreenshotBackup
             _settings.Save();
 
             _engine.RestoreNeeded += () => RunScan(RunKind.Restore);
-            _engine.DestinationOffline += () => OnUi(() => _tray.ShowBalloonTip(5000, AppName,
+            _engine.DestinationOffline += () => Notify(5000,
                 "Backup folder is unreachable \u2014 backups will resume automatically when it returns.",
-                ToolTipIcon.Warning));
+                ToolTipIcon.Warning);
             _engine.DestinationOnline += () => RunScan(RunKind.Startup);
 
             _engine.MigrateStructureIfNeeded();
             _engine.StartWatching();
             Logger.Log($"Watching for new screenshots. Backing up to: {_settings.Destination}");
             RunScan(RunKind.Startup);   // catch up on anything taken while we weren't running
+
+            // One-time: give pre-existing backups searchable metadata (older PNGs lacked it).
+            if (!_settings.MetadataBackfilled)
+                Task.Run(() =>
+                {
+                    _engine.BackfillMetadata();
+                    _settings.MetadataBackfilled = true;
+                    _settings.Save();
+                });
+        }
+
+        // Central gate for tray popups so the "show notifications" setting is honored.
+        private void Notify(int ms, string text, ToolTipIcon icon)
+        {
+            if (!_settings.ShowNotifications) return;
+            OnUi(() => _tray.ShowBalloonTip(ms, AppName, text, icon));
         }
 
         private void FirstRun()
@@ -110,13 +126,15 @@ namespace SteamScreenshotBackup
             if (setup.AutoStart)
                 _autoStartItem.Checked = true;   // CheckedChanged handler writes the registry value
 
-            // The installer can pre-select the (dangerous) "delete originals after
-            // import" task; honor that choice on first run.
+            // The installer can pre-select a couple of options via registry markers;
+            // honor them on first run.
             try
             {
                 using var k = Registry.CurrentUser.OpenSubKey(@"Software\SteamScreenshotBackup");
-                if (k?.GetValue("DeleteOriginalsDefault") is int v && v == 1)
+                if (k?.GetValue("DeleteOriginalsDefault") is int d && d == 1)
                     _settings.DeleteOriginals = true;
+                if (k?.GetValue("NotificationsOffDefault") is int n && n == 1)
+                    _settings.ShowNotifications = false;
             }
             catch { }
 
@@ -181,8 +199,7 @@ namespace SteamScreenshotBackup
                     if (run == null)
                     {
                         if (kind == RunKind.Manual)
-                            OnUi(() => _tray.ShowBalloonTip(4000, AppName,
-                                "Backup folder is currently unreachable.", ToolTipIcon.Warning));
+                            Notify(4000, "Backup folder is currently unreachable.", ToolTipIcon.Warning);
                         return;
                     }
 
@@ -191,8 +208,7 @@ namespace SteamScreenshotBackup
                 catch (Exception ex)
                 {
                     Logger.Error("Scan failed: " + ex.Message);
-                    OnUi(() => _tray.ShowBalloonTip(4000, AppName,
-                        "Backup scan failed \u2014 open the app for details.", ToolTipIcon.Error));
+                    Notify(4000, "Backup scan failed \u2014 open the app for details.", ToolTipIcon.Error);
                 }
             });
         }
@@ -211,22 +227,20 @@ namespace SteamScreenshotBackup
                 string text = kind == RunKind.Restore
                     ? $"Restored {n} screenshot{(n == 1 ? "" : "s")} across {games} game{(games == 1 ? "" : "s")}."
                     : $"Backed up {n} new screenshot{(n == 1 ? "" : "s")} from {games} game{(games == 1 ? "" : "s")}.";
-                OnUi(() => _tray.ShowBalloonTip(4000, AppName, text, ToolTipIcon.Info));
+                Notify(4000, text, ToolTipIcon.Info);
             }
             else if (kind == RunKind.Restore)
             {
                 Logger.Warn("Deleted backup files could not be restored - they no longer exist " +
                             "in Steam's screenshot folders.");
-                OnUi(() => _tray.ShowBalloonTip(5000, AppName,
-                    "Deleted files could not be restored \u2014 they no longer exist in Steam.",
-                    ToolTipIcon.Warning));
+                Notify(5000, "Deleted files could not be restored \u2014 they no longer exist in Steam.",
+                    ToolTipIcon.Warning);
             }
             else
             {
                 Logger.Log("Backup run complete: nothing new to copy.");
                 if (kind == RunKind.Manual)
-                    OnUi(() => _tray.ShowBalloonTip(3000, AppName,
-                        "Everything is already backed up.", ToolTipIcon.Info));
+                    Notify(3000, "Everything is already backed up.", ToolTipIcon.Info);
             }
         }
 

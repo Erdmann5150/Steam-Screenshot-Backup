@@ -59,9 +59,10 @@ Steam Screenshots/
   anything still in Steam is copied straight back. Prefer to stay in control? Turn
   it off and use **Re-sync missing** to review everything in Steam that isn't in
   your backup — grouped by game — and restore only what you pick.
-- **Searchable metadata** — the game name is injected into each backup copy
-  (JPEG Title/Subject EXIF, PNG text chunks) without re-encoding a single pixel,
-  so Windows Explorer search finds "Hollow Knight" wherever the files end up.
+- **Searchable metadata** — the game name is injected into each backup copy as
+  standard Windows-readable properties (JPEG EXIF Title/Subject, PNG XMP) without
+  re-encoding a single pixel or changing the file's timestamps, so it shows up as
+  the file's **Title**/**Tags** in Explorer and is searchable in indexed locations.
 - **Custom folder layouts** — choose between `Game`, `Game\Year`, `Year\Game` and
   more; existing backups can be reorganized in place. Handy for markdown journals
   and personal knowledge bases.
@@ -84,9 +85,9 @@ Steam Screenshots/
 1. Download `SteamScreenshotBackup-Setup-<version>.exe` from the
    [latest release](../../releases/latest).
 2. Run it. Pick an install folder (defaults to Program Files) and choose whether
-   to start with Windows, add Start Menu / Desktop shortcuts, and (optionally, and
-   flagged as dangerous) delete originals after import. The main window opens
-   automatically when setup finishes.
+   to start with Windows, add Start Menu / Desktop shortcuts, turn off popup
+   notifications, and (optionally, and flagged as dangerous) delete originals after
+   import. The main window opens automatically when setup finishes.
 3. On first launch, choose your backup folder and which screenshot types to back
    up. That's the entire setup.
 
@@ -107,21 +108,22 @@ Uninstall option cleans up after itself.
 
 ## Using the app
 
-- **Left-click** the tray icon to open the main window: statistics, a live
-  activity feed (backups, restores, deletions, warnings — all filterable), and
-  every action as a button. Double-click a backup entry to reveal the file in
-  Explorer.
+- **Left-click** the tray icon to toggle the main window (show or hide it):
+  statistics, a live activity feed (backups, restores, deletions, warnings — all
+  filterable), and every action as a button. Double-click a backup entry to reveal
+  the file in Explorer. The current version is shown in the window's bottom corner.
 - **Right-click** the tray icon for the quick menu: Open, Back up now, Re-sync
   missing screenshots, Open backup folder, Pause watching, Start with Windows,
   Settings, Uninstall, Exit.
 - **Re-sync missing** lists every screenshot in Steam that isn't in your backup,
   grouped by game, with checkboxes so you can restore all of them or just a few.
 - **Settings** covers the backup folder (with optional migration of existing
-  files), screenshot types, a manual high-resolution folder for when it can't be
-  auto-detected, folder layout (with optional in-place reorganization), theme,
-  autostart, whether deleted backup files are restored automatically, and a
-  dangerous *Delete originals after import* option (with a confirmation prompt and
-  an offer to apply it to already-imported screenshots).
+  files), screenshot types (turning one off offers to Recycle-Bin its existing
+  backups), a manual high-resolution folder for when it can't be auto-detected,
+  folder layout (with optional in-place reorganization), theme, popup
+  notifications, autostart, whether deleted backup files are restored
+  automatically, and a dangerous *Delete originals after import* option (with a
+  double confirmation and an offer to apply it to already-imported screenshots).
 - **Game names** lets you fix delisted or non-Steam games without touching any
   JSON by hand.
 
@@ -213,6 +215,25 @@ build.ps1                     One-command release build
 - Windows only.
 - High-resolution backups require Steam's *"Save an external copy"* option to be
   enabled; Steam does not create uncompressed copies retroactively.
+
+## Transparency
+
+This tool watches your Steam folders and copies — and, if you opt in, deletes —
+your personal screenshots. Because it touches your own files, **a core goal of the
+project is to be completely transparent about what it does behind the scenes.**
+
+- Everything it does is visible: the main window's activity feed and the on-disk
+  `app.log` record every backup, restore, deletion, warning, and error as it happens.
+- It is **non-destructive by default.** Steam's own files are never modified or
+  removed unless you explicitly enable the dangerous *Delete originals after import*
+  option — and even then, deletions go to the **Windows Recycle Bin**, never a
+  permanent wipe.
+- Deleting backups (e.g. when you turn a screenshot type off) also goes to the
+  Recycle Bin, and is always something you confirm first.
+- No telemetry, no accounts, no network calls except optional Steam store lookups
+  to resolve game names (cached locally, one lookup per game, ever).
+- The full source is here. Nothing about how your files are handled is hidden — if
+  the code and the documentation ever disagree, that's a bug worth reporting.
 
 ## Disclaimer
 
