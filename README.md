@@ -21,11 +21,22 @@ Steam Screenshots/
         └── 2026-04-12 13.37.15.png
 ```
 
-> **Screenshot placeholders** — add images here before publishing:
->
-> `![Main window](docs/img/main-window.png)` *(main UI with stats and activity log)*
-> `![Tray menu](docs/img/tray-menu.png)` *(right-click tray menu)*
-> `![Setup](docs/img/setup.png)` *(first-run setup window)*
+## Screenshots
+
+![The main window: backup statistics and a live, filterable activity feed](docs/img/main-window.png)
+
+*The main window — total games and screenshots backed up, per-session counters, and a live activity feed you can filter by backups, restores, deletions, warnings, or info.*
+
+<p align="center">
+  <img src="docs/img/settings.png" alt="Settings window" width="49%">
+  <img src="docs/img/tray-menu.png" alt="Right-click tray menu" width="34%">
+</p>
+
+*Left: Settings — backup folder, screenshot types (with a manual high-resolution folder), folder layout, theme, and startup. Right: the right-click tray menu for quick actions.*
+
+![The installer's task selection: start with Windows, Start Menu entry, and Desktop shortcut](docs/img/installer.png)
+
+*The installer lets you choose whether to start with Windows and add Start Menu / Desktop shortcuts.*
 
 ## Why this exists
 
