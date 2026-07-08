@@ -1,14 +1,21 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace SteamScreenshotBackup
 {
+    // Turns Steam appids into real game names, cheapest source first:
+    //   1. app manifests of installed games (all library drives)
+    //   2. the persistent name cache (shared with the PowerShell script)
+    //   3. shortcuts.vdf for non-Steam games added to Steam
+    //   4. the Steam store API (result cached forever)
+    // Unresolvable ids fall back to "AppID_<id>" / "Non-Steam App <id>".
     internal class AppNameResolver
     {
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
@@ -16,6 +23,8 @@ namespace SteamScreenshotBackup
         private readonly object _lock = new object();
         private readonly Dictionary<string, string> _manifestNames = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _cache = new Dictionary<string, string>();
+        private readonly HashSet<string> _failedLookups = new HashSet<string>();   // per-session
+        private Dictionary<ulong, string> _shortcutNames;
         private readonly string _cacheFile;
         private readonly string _steamPath;
         private DateTime _lastManifestScan = DateTime.MinValue;
@@ -31,7 +40,8 @@ namespace SteamScreenshotBackup
         public string ResolveFolderName(string appid)
         {
             string safe = Sanitize(Resolve(appid));
-            return safe ?? $"AppID_{appid}";
+            if (safe != null) return safe;
+            return SteamConfig.IsNonSteamAppId(appid) ? $"Non-Steam App {appid}" : $"AppID_{appid}";
         }
 
         private string Resolve(string appid)
@@ -40,6 +50,23 @@ namespace SteamScreenshotBackup
             {
                 if (_manifestNames.TryGetValue(appid, out var n1)) return n1;
                 if (_cache.TryGetValue(appid, out var n2)) return n2;
+                if (_failedLookups.Contains(appid)) return null;
+            }
+
+            // Non-Steam shortcut games never resolve via manifests or the store.
+            if (SteamConfig.IsNonSteamAppId(appid))
+            {
+                string shortcut = ResolveShortcut(appid);
+                if (shortcut != null)
+                {
+                    lock (_lock) _cache[appid] = shortcut;
+                    SaveCache();
+                }
+                else
+                {
+                    lock (_lock) _failedLookups.Add(appid);
+                }
+                return shortcut;
             }
 
             // Games installed after startup won't be in the manifest map yet; rescan (throttled).
@@ -51,13 +78,56 @@ namespace SteamScreenshotBackup
             }
 
             string name = QueryStore(appid);
-            if (name != null)
+            lock (_lock)
             {
-                lock (_lock) _cache[appid] = name;
-                SaveCache();
+                if (name != null) _cache[appid] = name;
+                else _failedLookups.Add(appid);   // don't hammer the API again this session
             }
+            if (name != null) SaveCache();
             return name;
         }
+
+        private string ResolveShortcut(string appid)
+        {
+            lock (_lock)
+                _shortcutNames ??= SteamConfig.ReadShortcutNames(_steamPath);
+            if (!ulong.TryParse(appid, out var id)) return null;
+            // The screenshot folder id is the 32-bit shortcut id, sometimes shifted
+            // into the high dword of a 64-bit value; try both interpretations.
+            if (_shortcutNames.TryGetValue(id, out var name)) return name;
+            if (_shortcutNames.TryGetValue(id >> 32, out name)) return name;
+            if (_shortcutNames.TryGetValue(id & 0xFFFFFFFF, out name)) return name;
+            return null;
+        }
+
+        // ----- cache editing API for the "Manage game names" window -----
+
+        public SortedDictionary<string, string> GetCachedNames()
+        {
+            lock (_lock) return new SortedDictionary<string, string>(_cache);
+        }
+
+        public void SetCachedName(string appid, string name)
+        {
+            lock (_lock)
+            {
+                _cache[appid] = name;
+                _failedLookups.Remove(appid);
+            }
+            SaveCache();
+        }
+
+        public void RemoveCachedName(string appid)
+        {
+            lock (_lock)
+            {
+                _cache.Remove(appid);
+                _failedLookups.Remove(appid);
+            }
+            SaveCache();
+        }
+
+        // ----- sources -----
 
         private void ScanManifests()
         {
@@ -114,18 +184,41 @@ namespace SteamScreenshotBackup
             }
             catch (Exception ex)
             {
-                Logger.Log($"Name lookup failed for {appid}: {ex.Message}");
+                Logger.Warn($"Name lookup failed for {appid}: {ex.Message}");
             }
             return null;
         }
+
+        // ----- persistence -----
 
         private void LoadCache()
         {
             try
             {
                 if (!File.Exists(_cacheFile)) return;
-                var d = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(_cacheFile));
-                if (d != null) foreach (var kv in d) _cache[kv.Key] = kv.Value;
+
+                byte[] bytes = File.ReadAllBytes(_cacheFile);
+                string json;
+                bool recovered = false;
+                try
+                {
+                    json = new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(bytes);
+                }
+                catch (DecoderFallbackException)
+                {
+                    // Cache written in the legacy ANSI code page (old PowerShell script
+                    // versions did this); decode it correctly so special characters survive.
+                    json = Encoding.GetEncoding(1252).GetString(bytes);
+                    recovered = true;
+                }
+
+                var d = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                if (d != null)
+                    foreach (var kv in d)
+                        if (!kv.Value.Contains('\uFFFD'))   // drop already-corrupted names; they re-resolve
+                            _cache[kv.Key] = kv.Value;
+
+                if (recovered) SaveCache();   // rewrite as clean UTF-8 immediately
             }
             catch { }
         }
@@ -145,7 +238,7 @@ namespace SteamScreenshotBackup
         private static string Sanitize(string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return null;
-            string clean = Regex.Replace(name, "[\\\\/:*?\"<>|]", "").Trim(' ', '.');
+            string clean = Regex.Replace(name, "[\\\\/:*?\"<>|\uFFFD]", "").Trim(' ', '.');
             return string.IsNullOrWhiteSpace(clean) ? null : clean;
         }
     }

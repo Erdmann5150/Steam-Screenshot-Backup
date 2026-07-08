@@ -1,7 +1,5 @@
-﻿using System;
+using System;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -9,139 +7,214 @@ using Microsoft.Win32;
 
 namespace SteamScreenshotBackup
 {
+    // Application coordinator: owns the tray icon, the backup engine, and the
+    // actions shared between the tray menu and the main window.
     internal class TrayContext : ApplicationContext
     {
+        private const string AppName = "Steam Screenshot Backup";
         private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string RunValue = "SteamScreenshotBackup";
 
         private readonly NotifyIcon _tray;
         private readonly Settings _settings;
         private readonly Control _ui = new Control();   // invoke target for worker-thread callbacks
+        private readonly ToolStripMenuItem _pauseItem;
         private readonly ToolStripMenuItem _autoStartItem;
+        private readonly ContextMenuStrip _menu;
         private BackupEngine _engine;
 
-        public TrayContext()
+        public BackupEngine Engine => _engine;
+        public Settings SettingsObj => _settings;
+        public bool IsPaused => _engine?.Paused ?? false;
+        public event Action PauseChanged;
+
+        public TrayContext(Settings settings)
         {
+            _settings = settings;
             _ = _ui.Handle;   // force handle creation on the UI thread
 
-            _settings = Settings.Load();
             if (string.IsNullOrWhiteSpace(_settings.Destination))
                 _settings.Destination = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Steam Screenshots");
 
-            var menu = new ContextMenuStrip();
-            menu.Items.Add("Back up now", null, (s, e) => RunFullScan(showResult: true));
-            menu.Items.Add("Open backup folder", null, (s, e) => OpenBackupFolder());
-            menu.Items.Add(new ToolStripSeparator());
+            _menu = new ContextMenuStrip { Renderer = Theme.MenuRenderer };
+            _menu.Items.Add("Open " + AppName, null, (s, e) => MainWindow.ShowWindow(this));
+            _menu.Items.Add("Back up now", null, (s, e) => BackUpNow());
+            _menu.Items.Add("Open backup folder", null, (s, e) => OpenBackupFolder());
+            _menu.Items.Add(new ToolStripSeparator());
 
-            var pauseItem = new ToolStripMenuItem("Pause watching") { CheckOnClick = true };
-            pauseItem.CheckedChanged += (s, e) => { if (_engine != null) _engine.Paused = pauseItem.Checked; };
-            menu.Items.Add(pauseItem);
+            _pauseItem = new ToolStripMenuItem("Pause watching") { CheckOnClick = true };
+            _pauseItem.CheckedChanged += (s, e) => ApplyPause(_pauseItem.Checked);
+            _menu.Items.Add(_pauseItem);
 
             _autoStartItem = new ToolStripMenuItem("Start with Windows")
-                { Checked = IsAutoStart(), CheckOnClick = true };
-            _autoStartItem.CheckedChanged += (s, e) => SetAutoStart(_autoStartItem.Checked);
-            menu.Items.Add(_autoStartItem);
+                { Checked = IsAutoStartEnabled, CheckOnClick = true };
+            _autoStartItem.CheckedChanged += (s, e) => WriteAutoStart(_autoStartItem.Checked);
+            _menu.Items.Add(_autoStartItem);
 
-            menu.Items.Add("Change backup folderâ€¦", null, (s, e) => ChangeDestination());
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Exit", null, (s, e) => ExitApp());
+            _menu.Items.Add("Settings\u2026", null, (s, e) => ShowSettings(null));
+            _menu.Items.Add(new ToolStripSeparator());
+            _menu.Items.Add("Uninstall\u2026", null, (s, e) => Uninstall());
+            _menu.Items.Add("Exit", null, (s, e) => ExitApp());
+            Theme.Changed += () => _menu.Renderer = Theme.MenuRenderer;
 
             _tray = new NotifyIcon
             {
-                Icon = CreateTrayIcon(),
-                ContextMenuStrip = menu,
-                Text = "Steam Screenshot Backup",
+                Icon = Theme.AppIcon,
+                ContextMenuStrip = _menu,
+                Text = AppName,
                 Visible = true
             };
-            _tray.DoubleClick += (s, e) => OpenBackupFolder();
-
-            if (!_settings.FirstRunDone) FirstRun();
-            _settings.Save();
+            _tray.MouseClick += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left) MainWindow.ShowWindow(this);
+            };
 
             try
             {
-                _engine = new BackupEngine(() => _settings.Destination);
+                _engine = new BackupEngine(_settings);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Steam Screenshot Backup",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageDialog.Fail(ex.Message);
                 _tray.Visible = false;
                 Environment.Exit(1);
                 return;
             }
 
-            _engine.Status += SetStatus;
+            if (!_settings.FirstRunDone) FirstRun();
+            _settings.Save();
+
+            _engine.RestoreNeeded += () => RunScan(RunKind.Restore);
+            _engine.DestinationOffline += () => OnUi(() => _tray.ShowBalloonTip(5000, AppName,
+                "Backup folder is unreachable \u2014 backups will resume automatically when it returns.",
+                ToolTipIcon.Warning));
+            _engine.DestinationOnline += () => RunScan(RunKind.Startup);
+
+            _engine.MigrateStructureIfNeeded();
             _engine.StartWatching();
-            RunFullScan(showResult: false);   // catch up on anything taken while we weren't running
+            Logger.Log($"Watching for new screenshots. Backing up to: {_settings.Destination}");
+            RunScan(RunKind.Startup);   // catch up on anything taken while we weren't running
         }
 
         private void FirstRun()
         {
-            MessageBox.Show(
-                "Steam Screenshot Backup runs in the system tray and automatically copies every Steam " +
-                "screenshot you take into per-game folders with readable names.\n\n" +
-                "Next, choose where your backups should be stored.",
-                "Welcome", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            using var setup = new SetupWindow(_settings.Destination, _engine.HighResSourceAvailable);
+            setup.ShowDialog();   // closing the window accepts the defaults
 
-            ChangeDestination();
-
-            if (MessageBox.Show("Start automatically when you sign in to Windows?",
-                    "Steam Screenshot Backup", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
-                == DialogResult.Yes)
-            {
+            if (!string.IsNullOrWhiteSpace(setup.Destination))
+                _settings.Destination = setup.Destination;
+            _settings.BackupStandard = setup.BackupStandard || !setup.BackupHighRes;
+            _settings.BackupHighRes = setup.BackupHighRes;
+            if (setup.AutoStart)
                 _autoStartItem.Checked = true;   // CheckedChanged handler writes the registry value
-            }
 
             _settings.FirstRunDone = true;
         }
 
-        private void ChangeDestination()
-        {
-            using var dlg = new FolderBrowserDialog
-            {
-                Description = "Choose the folder where screenshots will be backed up.",
-                UseDescriptionForTitle = true,
-                SelectedPath = _settings.Destination
-            };
-            if (dlg.ShowDialog() != DialogResult.OK) return;
+        // ------------------------------------------------------------- actions
 
-            _settings.Destination = dlg.SelectedPath;
-            _settings.Save();
-            RunFullScan(showResult: true);   // populate the new location
+        public void BackUpNow() => RunScan(RunKind.Manual);
+
+        public void OpenBackupFolder()
+        {
+            try
+            {
+                Directory.CreateDirectory(_settings.Destination);
+                Process.Start(new ProcessStartInfo { FileName = _settings.Destination, UseShellExecute = true });
+            }
+            catch (Exception ex) { Logger.Error("Open folder failed: " + ex.Message); }
         }
 
-        private void RunFullScan(bool showResult)
+        public void SetPaused(bool paused) => _pauseItem.Checked = paused;   // handler does the rest
+
+        private void ApplyPause(bool paused)
+        {
+            if (_engine == null) return;
+            _engine.Paused = paused;
+            Logger.Log(paused ? "Watching paused." : "Watching resumed.");
+            PauseChanged?.Invoke();
+        }
+
+        public void ShowSettings(IWin32Window owner)
+        {
+            using var dlg = new SettingsWindow(this, _settings);
+            if (owner != null) dlg.ShowDialog(owner);
+            else dlg.ShowDialog();
+        }
+
+        // Called by SettingsWindow after saving; restarts watchers when sources or
+        // the destination changed, then runs a scan to pick up the difference.
+        public void OnSettingsChanged(bool sourcesChanged)
+        {
+            _autoStartItem.Checked = IsAutoStartEnabled;
+            if (sourcesChanged && _engine != null)
+            {
+                _engine.RestartWatching();
+                RunScan(RunKind.DestinationChanged);
+            }
+        }
+
+        // ----------------------------------------------------------- scan runs
+
+        private void RunScan(RunKind kind)
         {
             if (_engine == null) return;
             Task.Run(() =>
             {
                 try
                 {
-                    var (games, copied, skipped) = _engine.FullScan();
-                    SetStatus($"scan done, {copied} new");
-                    if (showResult || copied > 0)
-                        OnUi(() => _tray.ShowBalloonTip(4000, "Steam Screenshot Backup",
-                            $"{games} games â€” {copied} new screenshots copied, {skipped} already backed up.",
-                            ToolTipIcon.Info));
+                    var run = _engine.FullScan(restore: kind == RunKind.Restore);
+                    if (run == null)
+                    {
+                        if (kind == RunKind.Manual)
+                            OnUi(() => _tray.ShowBalloonTip(4000, AppName,
+                                "Backup folder is currently unreachable.", ToolTipIcon.Warning));
+                        return;
+                    }
+
+                    ReportRun(kind, run);
                 }
                 catch (Exception ex)
                 {
-                    Logger.Log("Full scan failed: " + ex.Message);
-                    OnUi(() => _tray.ShowBalloonTip(4000, "Steam Screenshot Backup",
-                        "Backup scan failed â€” see app.log for details.", ToolTipIcon.Error));
+                    Logger.Error("Scan failed: " + ex.Message);
+                    OnUi(() => _tray.ShowBalloonTip(4000, AppName,
+                        "Backup scan failed \u2014 open the app for details.", ToolTipIcon.Error));
                 }
             });
         }
 
-        private void SetStatus(string s)
+        // Log + notify with only what THIS run did (no lifetime totals).
+        private void ReportRun(RunKind kind, RunResult run)
         {
-            OnUi(() =>
+            int n = run.Copied;
+            int games = run.GamesAffected.Count;
+            string verb = kind == RunKind.Restore ? "restored" : "new";
+
+            if (n > 0)
             {
-                string text = "Steam Screenshots â€” " + s;
-                _tray.Text = text.Length > 63 ? text.Substring(0, 63) : text;   // tooltip hard limit
-            });
+                Logger.Log($"{(kind == RunKind.Restore ? "Restore" : "Backup")} run complete: " +
+                           $"{n} {verb} file{(n == 1 ? "" : "s")} across {games} game{(games == 1 ? "" : "s")}.");
+                string text = kind == RunKind.Restore
+                    ? $"Restored {n} screenshot{(n == 1 ? "" : "s")} across {games} game{(games == 1 ? "" : "s")}."
+                    : $"Backed up {n} new screenshot{(n == 1 ? "" : "s")} from {games} game{(games == 1 ? "" : "s")}.";
+                OnUi(() => _tray.ShowBalloonTip(4000, AppName, text, ToolTipIcon.Info));
+            }
+            else if (kind == RunKind.Restore)
+            {
+                Logger.Warn("Deleted backup files could not be restored - they no longer exist " +
+                            "in Steam's screenshot folders.");
+                OnUi(() => _tray.ShowBalloonTip(5000, AppName,
+                    "Deleted files could not be restored \u2014 they no longer exist in Steam.",
+                    ToolTipIcon.Warning));
+            }
+            else
+            {
+                Logger.Log("Backup run complete: nothing new to copy.");
+                if (kind == RunKind.Manual)
+                    OnUi(() => _tray.ShowBalloonTip(3000, AppName,
+                        "Everything is already backed up.", ToolTipIcon.Info));
+            }
         }
 
         private void OnUi(Action a)
@@ -150,23 +223,20 @@ namespace SteamScreenshotBackup
             else a();
         }
 
-        private void OpenBackupFolder()
+        // ------------------------------------------------------------ autostart
+
+        public bool IsAutoStartEnabled
         {
-            try
+            get
             {
-                Directory.CreateDirectory(_settings.Destination);
-                Process.Start(new ProcessStartInfo { FileName = _settings.Destination, UseShellExecute = true });
+                using var k = Registry.CurrentUser.OpenSubKey(RunKey);
+                return k?.GetValue(RunValue) != null;
             }
-            catch (Exception ex) { Logger.Log("Open folder failed: " + ex.Message); }
         }
 
-        private static bool IsAutoStart()
-        {
-            using var k = Registry.CurrentUser.OpenSubKey(RunKey);
-            return k?.GetValue(RunValue) != null;
-        }
+        public void SetAutoStartEnabled(bool on) => _autoStartItem.Checked = on;
 
-        private static void SetAutoStart(bool on)
+        private static void WriteAutoStart(bool on)
         {
             using var k = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
             if (k == null) return;
@@ -174,30 +244,72 @@ namespace SteamScreenshotBackup
             else k.DeleteValue(RunValue, false);
         }
 
+        // ------------------------------------------------------------ uninstall
+
+        // Installed builds carry Inno Setup's uninstaller next to the exe; portable
+        // builds clean up after themselves with a detached cmd.
+        public void Uninstall()
+        {
+            string exeDir = AppContext.BaseDirectory;
+            string innoUninstaller = Path.Combine(exeDir, "unins000.exe");
+
+            if (File.Exists(innoUninstaller))
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo { FileName = innoUninstaller, UseShellExecute = true });
+                    ExitApp();
+                }
+                catch (Exception ex)
+                {
+                    MessageDialog.Fail("Could not start the uninstaller:\n" + ex.Message);
+                }
+                return;
+            }
+
+            bool ok = MessageDialog.AskYesNo(
+                "This removes " + AppName + " from this PC:\n\n" +
+                "  \u2022  stops the app and removes it from Windows startup\n" +
+                "  \u2022  deletes its settings, game-name cache, and log\n" +
+                "  \u2022  deletes the program file itself\n\n" +
+                "Your backed-up screenshots and Steam's own files are NOT touched.\n\n" +
+                "Uninstall now?",
+                "Uninstall " + AppName);
+            if (!ok) return;
+
+            try { WriteAutoStart(false); } catch { }
+
+            // The exe can't delete itself while running, and the data folder could be
+            // recreated by a late log write - hand both jobs to a detached cmd that
+            // waits for this process to exit. Everything is best-effort by design.
+            string exe = Environment.ProcessPath ?? Application.ExecutablePath;
+            string dataDir = Settings.Dir;
+            string temp = Path.Combine(Path.GetTempPath(), ".net", "SteamScreenshotBackup");
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = "/c ping -n 4 127.0.0.1 >nul" +
+                                $" & del /f /q \"{exe}\"" +
+                                $" & rmdir /s /q \"{dataDir}\"" +
+                                $" & rmdir /s /q \"{temp}\"",
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                });
+            }
+            catch { }
+
+            try { Directory.Delete(dataDir, true); } catch { }
+            ExitApp();
+        }
+
         private void ExitApp()
         {
             _tray.Visible = false;
             _engine?.Dispose();
             ExitThread();
-        }
-
-        private static Icon CreateTrayIcon()
-        {
-            // Simple camera glyph drawn at runtime â€” no binary assets in the repo.
-            using var bmp = new Bitmap(32, 32);
-            using (var g = Graphics.FromImage(bmp))
-            {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.Clear(Color.Transparent);
-                using var body = new SolidBrush(Color.FromArgb(35, 35, 40));
-                g.FillRectangle(body, 2, 9, 28, 19);
-                g.FillRectangle(body, 10, 5, 12, 6);
-                using var lens = new SolidBrush(Color.FromArgb(102, 192, 244));   // Steam blue
-                g.FillEllipse(lens, 9, 12, 14, 14);
-                using var inner = new SolidBrush(Color.White);
-                g.FillEllipse(inner, 13, 16, 6, 6);
-            }
-            return Icon.FromHandle(bmp.GetHicon());
         }
     }
 }
