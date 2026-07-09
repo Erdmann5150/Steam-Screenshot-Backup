@@ -38,7 +38,7 @@ namespace SteamScreenshotBackup
         {
             _engine = engine;
 
-            Text = "Re-sync missing screenshots";
+            Text = "Re-Sync Missing Screenshots";
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(640, 560);
             MinimumSize = new Size(520, 400);
@@ -49,7 +49,7 @@ namespace SteamScreenshotBackup
             var top = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = Theme.Panel };
             top.Controls.Add(new Label
             {
-                Text = "Screenshots in Steam that aren't in your backup",
+                Text = "Screenshots in Steam That Aren't in Your Backup",
                 Font = Theme.HeaderFont,
                 ForeColor = Theme.Text,
                 AutoSize = true,
@@ -85,7 +85,7 @@ namespace SteamScreenshotBackup
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Theme.Panel };
             var bottomEdge = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.PanelEdge };
 
-            _selectAll = new Button { Text = "Select all", Size = new Size(96, 32), Location = new Point(14, 12) };
+            _selectAll = new Button { Text = "Select All", Size = new Size(96, 32), Location = new Point(14, 12) };
             Theme.StyleButton(_selectAll);
             _selectAll.Click += (s, e) => SetAllChecked(true);
 
@@ -105,7 +105,7 @@ namespace SteamScreenshotBackup
 
             _resync = new Button
             {
-                Text = "Re-sync selected",
+                Text = "Re-Sync Selected",
                 Size = new Size(150, 32),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
                 Enabled = false
@@ -165,11 +165,14 @@ namespace SteamScreenshotBackup
             foreach (var group in byGame)
             {
                 var items = group.OrderBy(i => i.Timestamp).ToList();
-                var parent = new TreeNode($"{group.Key}  ({items.Count})") { Tag = null };
-                foreach (var it in items)
+                var parent = new TreeNode($"{group.Key}  ({items.Count})")
+                    { Tag = null, BackColor = Theme.Panel, ForeColor = Theme.TextDim };
+                for (int i = 0; i < items.Count; i++)
                 {
+                    var it = items[i];
                     parent.Nodes.Add(new TreeNode(
-                        $"{it.DisplayName}   [{BackupEngine.TypeLabel(it.Type)}]") { Tag = it });
+                        $"{it.DisplayName}   [{BackupEngine.TypeLabel(it.Type)}]")
+                        { Tag = it, BackColor = i % 2 == 0 ? Theme.Background : Theme.RowAlt });
                 }
                 _tree.Nodes.Add(parent);
             }
@@ -226,7 +229,7 @@ namespace SteamScreenshotBackup
         {
             int n = CheckedItems().Count;
             _resync.Enabled = n > 0 && !_busy;
-            _resync.Text = n > 0 ? $"Re-sync selected ({n})" : "Re-sync selected";
+            _resync.Text = n > 0 ? $"Re-Sync Selected ({n})" : "Re-Sync Selected";
         }
 
         // ------------------------------------------------------------- re-syncing
@@ -238,7 +241,7 @@ namespace SteamScreenshotBackup
 
             var progress = new Form
             {
-                Text = "Re-syncing\u2026",
+                Text = "Re-Syncing\u2026",
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 ControlBox = false,
                 StartPosition = FormStartPosition.CenterParent,

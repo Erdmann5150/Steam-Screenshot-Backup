@@ -86,6 +86,16 @@ namespace SteamScreenshotBackup
             c.Disposed += (s, e) => Changed -= Apply;
         }
 
+        // ListView (and a few other controls) don't expose DoubleBuffered publicly, so
+        // owner-drawn rows repaint directly to screen and visibly flicker on every mouse
+        // move over the list. Flip the protected property on instead.
+        public static void EnableDoubleBuffer(Control c)
+        {
+            var prop = typeof(Control).GetProperty("DoubleBuffered",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            prop?.SetValue(c, true, null);
+        }
+
         // Base styling every window goes through: colors, font, icon, matching title bar.
         public static void ApplyWindow(Form f)
         {

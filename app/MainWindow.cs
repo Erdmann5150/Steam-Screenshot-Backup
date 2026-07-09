@@ -128,7 +128,7 @@ namespace SteamScreenshotBackup
 
             // ----- bottom bar -----
             _bottom = new Panel { Dock = DockStyle.Bottom, Height = 56 };
-            var openLog = MakeButton("Open full log file", 150);
+            var openLog = MakeButton("Open Full Log File", 150);
             openLog.Location = new Point(14, 12);
             openLog.Click += (s, e) => OpenLogFile();
             _bottom.Controls.Add(openLog);
@@ -178,6 +178,7 @@ namespace SteamScreenshotBackup
             _list.Resize += (s, e) => FitDetailsColumn();
             _list.MouseDoubleClick += (s, e) => RevealSelectedFile();
             Theme.ApplyScrollbars(_list);
+            Theme.EnableDoubleBuffer(_list);
 
             _empty = new Label
             {
@@ -246,13 +247,13 @@ namespace SteamScreenshotBackup
         private void ShowUtilitiesMenu(Control anchor)
         {
             var menu = new ContextMenuStrip { Renderer = Theme.MenuRenderer };
-            menu.Items.Add("Delete standard backups", null, (s, e) => DeleteTypeBackups(ScreenshotType.Standard));
-            menu.Items.Add("Delete high-resolution backups", null, (s, e) => DeleteTypeBackups(ScreenshotType.HighRes));
-            menu.Items.Add("Delete Markdown indexes", null, (s, e) => DeleteMarkdownIndexes());
-            menu.Items.Add("Delete original Steam screenshot files", null, (s, e) => DeleteImportedOriginals());
-            menu.Items.Add("Clear application logs", null, (s, e) => ClearApplicationLogs());
+            menu.Items.Add("Delete Standard Backups", null, (s, e) => DeleteTypeBackups(ScreenshotType.Standard));
+            menu.Items.Add("Delete High-Resolution Backups", null, (s, e) => DeleteTypeBackups(ScreenshotType.HighRes));
+            menu.Items.Add("Delete Markdown Indexes", null, (s, e) => DeleteMarkdownIndexes());
+            menu.Items.Add("Delete Original Steam Screenshot Files", null, (s, e) => DeleteImportedOriginals());
+            menu.Items.Add("Clear Application Logs", null, (s, e) => ClearApplicationLogs());
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Delete specific files/folders\u2026", null,
+            menu.Items.Add("Granular Deletion", null,
                 (s, e) => TargetedDeleteWindow.ShowWindow(_app.Engine, this));
             menu.Show(anchor, new Point(0, anchor.Height));
         }
@@ -263,7 +264,7 @@ namespace SteamScreenshotBackup
             string label = BackupEngine.TypeLabel(type);
             var (count, bytes) = engine.PreviewTypeBackups(type);
             if (!MessageDialog.ConfirmDeletion($"Delete all {label} backups?", count, bytes)) return;
-            ProgressWindow.Run(this, "Deleting backups\u2026", $"Sending {label} backups to the Recycle Bin\u2026",
+            ProgressWindow.Run(this, "Deleting Backups\u2026", $"Sending {label} backups to the Recycle Bin\u2026",
                 progress => engine.DeleteTypeBackups(type));
         }
 
@@ -272,7 +273,7 @@ namespace SteamScreenshotBackup
             var engine = _app.Engine;
             var (count, bytes) = engine.PreviewMarkdownIndexes();
             if (!MessageDialog.ConfirmDeletion("Delete all Markdown index files?", count, bytes)) return;
-            ProgressWindow.Run(this, "Deleting index\u2026", "Sending _Screenshot_Log.md files to the Recycle Bin\u2026",
+            ProgressWindow.Run(this, "Deleting Index\u2026", "Sending _Screenshot_Log.md files to the Recycle Bin\u2026",
                 progress => engine.DeleteMarkdownIndexes(progress));
         }
 
@@ -282,7 +283,7 @@ namespace SteamScreenshotBackup
             var (count, bytes) = engine.PreviewPurgeImportedOriginals();
             if (!MessageDialog.ConfirmDeletion(
                     "Delete original Steam screenshots that are already backed up?", count, bytes)) return;
-            ProgressWindow.Run(this, "Deleting originals\u2026", "Sending imported originals to the Recycle Bin\u2026",
+            ProgressWindow.Run(this, "Deleting Originals\u2026", "Sending imported originals to the Recycle Bin\u2026",
                 progress => engine.PurgeImportedOriginals(progress));
         }
 
@@ -494,8 +495,15 @@ namespace SteamScreenshotBackup
 
         private void DrawSubItem(object sender, DrawListViewSubItemEventArgs e)
         {
-            var bg = e.Item.Selected ? Theme.Selection : Theme.Background;
+            Color bg;
+            if (e.Item.Selected) bg = Theme.Selection;
+            else bg = e.ItemIndex % 2 == 0 ? Theme.Background : Theme.RowAlt;
             using (var b = new SolidBrush(bg)) e.Graphics.FillRectangle(b, e.Bounds);
+
+            // A faint divider under every row makes it easy to tell where one entry
+            // ends and the next begins, even between two same-shade rows.
+            using (var edge = new Pen(Theme.PanelEdge))
+                e.Graphics.DrawLine(edge, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
 
             var level = ((LogEntry)e.Item.Tag).Level;
             Color fg = e.ColumnIndex switch

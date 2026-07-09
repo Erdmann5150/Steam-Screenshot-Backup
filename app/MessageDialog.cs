@@ -21,7 +21,7 @@ namespace SteamScreenshotBackup
         // to the Recycle Bin. Returns false (with an info dialog, not a confirmation)
         // when there is nothing to delete.
         public static bool ConfirmDeletion(string action, int count, long bytes,
-            string title = "Confirm deletion")
+            string title = "Confirm Deletion")
         {
             if (count == 0)
             {

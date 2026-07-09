@@ -1,10 +1,10 @@
 ; Inno Setup script for Steam Screenshot Backup.
 ; Build with build.ps1 at the repository root (it publishes the exe first and
 ; passes the version in), or manually:
-;   ISCC.exe setup.iss /DAppVersion=3.6.1 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
+;   ISCC.exe setup.iss /DAppVersion=3.7.0 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
 
 #ifndef AppVersion
-  #define AppVersion "3.6.1"
+  #define AppVersion "3.7.0"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\app\bin\Release\net8.0-windows\win-x64\publish"
@@ -95,7 +95,7 @@ const
   clLiteText  = $0032261A;   // RGB(26,38,50)
 
 var
-  ThemePage: TInputOptionWizardPage;
+  ThemeToggle: TNewButton;
   IsDarkTheme: Boolean;
 
 procedure ApplyThemeTo(C: TControl; Dark: Boolean; Bg, Panel, Txt: TColor);
@@ -139,26 +139,42 @@ begin
   DwmSetWindowAttribute(WizardForm.Handle, 20, v, SizeOf(v));   // dark/light title bar
 end;
 
+// Caption reflects the mode the click will switch TO, so it reads as a call
+// to action ("Light Mode") rather than a status readout of the current one.
+procedure UpdateThemeToggleCaption;
+begin
+  if ThemeToggle = nil then exit;
+  if IsDarkTheme then ThemeToggle.Caption := 'Light Mode'
+  else ThemeToggle.Caption := 'Dark Mode';
+end;
+
+procedure ThemeToggleClick(Sender: TObject);
+begin
+  IsDarkTheme := not IsDarkTheme;
+  UpdateThemeToggleCaption;
+  ApplyTheme;
+end;
+
 procedure InitializeWizard;
 begin
   IsDarkTheme := True;   // installer defaults to dark mode
 
-  ThemePage := CreateInputOptionPage(wpWelcome,
-    'Choose a Theme', 'Select the appearance for this setup wizard',
-    'This only changes how the installer looks, not the app itself - the app has its own ' +
-    'appearance setting.',
-    True, False);
-  ThemePage.Add('Dark (recommended)');
-  ThemePage.Add('Light');
-  ThemePage.SelectedValueIndex := 0;
+  // Subtle inline toggle on the Welcome page itself, instead of a blocking
+  // theme-choice page or popup - matches the app's own light/dark setting.
+  ThemeToggle := TNewButton.Create(WizardForm);
+  ThemeToggle.Parent := WizardForm.WelcomePage;
+  ThemeToggle.Width := 90;
+  ThemeToggle.Height := 23;
+  ThemeToggle.Left := WizardForm.WelcomePage.ClientWidth - ThemeToggle.Width;
+  ThemeToggle.Top := 0;
+  ThemeToggle.OnClick := @ThemeToggleClick;
+  UpdateThemeToggleCaption;
 
   ApplyTheme;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  if (ThemePage <> nil) and (CurPageID > ThemePage.ID) then
-    IsDarkTheme := ThemePage.SelectedValueIndex = 0;
   ApplyTheme;   // re-theme controls created per page
 end;
 

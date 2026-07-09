@@ -48,7 +48,7 @@ namespace SteamScreenshotBackup
             });
             header.Controls.Add(new Label
             {
-                Text = "First-time setup",
+                Text = "First-Time Setup",
                 Font = Theme.SmallFont,
                 ForeColor = Theme.Accent,
                 AutoSize = true,
@@ -89,7 +89,7 @@ namespace SteamScreenshotBackup
 
             var browse = new Button
             {
-                Text = "Browse\u2026",
+                Text = "Browse",
                 Size = new Size(92, _dest.Height + 2),
                 Location = new Point(440, 213)
             };
@@ -157,7 +157,7 @@ namespace SteamScreenshotBackup
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 60, BackColor = Theme.Panel };
             var go = new Button
             {
-                Text = "Start backing up",
+                Text = "Start Backing Up",
                 Size = new Size(160, 34),
                 DialogResult = DialogResult.OK,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right

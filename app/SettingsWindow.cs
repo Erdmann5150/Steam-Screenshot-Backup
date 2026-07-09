@@ -54,33 +54,38 @@ namespace SteamScreenshotBackup
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 60, BackColor = Theme.Panel };
             var footerEdge = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.PanelEdge };
 
-            var uninstall = new Button { Text = "Uninstall\u2026", Size = new Size(110, 32), Location = new Point(14, 13) };
+            var uninstall = new Button { Text = "Uninstall", Size = new Size(110, 32), Location = new Point(14, 13) };
             Theme.StyleButton(uninstall);
             uninstall.ForeColor = Theme.Error;
             uninstall.Click += (s, e) => { Close(); _app.Uninstall(); };
             footer.Controls.Add(uninstall);
 
-            var cancel = new Button
+            // Close just closes the window; it never implies "discard" the way Cancel
+            // would, since Apply may already have saved earlier changes in this session.
+            var close = new Button
             {
-                Text = "Cancel",
+                Text = "Close",
                 Size = new Size(96, 32),
                 DialogResult = DialogResult.Cancel,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
-            cancel.Location = new Point(footer.Width - 96 - 14, 13);
-            Theme.StyleButton(cancel);
-            footer.Controls.Add(cancel);
+            close.Location = new Point(footer.Width - 96 - 14, 13);
+            Theme.StyleButton(close);
+            footer.Controls.Add(close);
 
-            var save = new Button
+            // Apply saves in the background and leaves the window open, so the user can
+            // keep adjusting settings and see the effect of each change without having
+            // to reopen the window.
+            var apply = new Button
             {
-                Text = "Save",
+                Text = "Apply",
                 Size = new Size(96, 32),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
-            save.Location = new Point(footer.Width - 96 - 14 - 96 - 10, 13);
-            Theme.StyleButton(save, primary: true);
-            save.Click += (s, e) => SaveChanges();
-            footer.Controls.Add(save);
+            apply.Location = new Point(footer.Width - 96 - 14 - 96 - 10, 13);
+            Theme.StyleButton(apply, primary: true);
+            apply.Click += (s, e) => SaveChanges();
+            footer.Controls.Add(apply);
 
             // ----- content host + two pages -----
             var contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
@@ -195,7 +200,7 @@ namespace SteamScreenshotBackup
                 BorderStyle = BorderStyle.FixedSingle
             };
             Theme.StyleInput(_dest);
-            var browse = new Button { Text = "Browse\u2026", Size = new Size(92, _dest.Height + 2) };
+            var browse = new Button { Text = "Browse", Size = new Size(92, _dest.Height + 2) };
             browse.Location = new Point(440, y - 1);
             Theme.StyleButton(browse);
             browse.Click += (s, e) => Browse();
@@ -229,7 +234,7 @@ namespace SteamScreenshotBackup
             };
             if (detected != null) _highResFolder.PlaceholderText = detected;
             Theme.StyleInput(_highResFolder);
-            var hrBrowse = new Button { Text = "Browse\u2026", Size = new Size(92, _highResFolder.Height + 2) };
+            var hrBrowse = new Button { Text = "Browse", Size = new Size(92, _highResFolder.Height + 2) };
             hrBrowse.Location = new Point(440, y - 1);
             Theme.StyleButton(hrBrowse);
             hrBrowse.Click += (s, e) => BrowseHighRes();
@@ -276,7 +281,7 @@ namespace SteamScreenshotBackup
             var tabBar = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = Theme.Panel };
             var tabEdge = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.PanelEdge };
             _tabGeneral = MakeTab("General", 8, 132);
-            _tabBackup = MakeTab("Backup configuration", 8 + 132, 200);
+            _tabBackup = MakeTab("Backup Configuration", 8 + 132, 200);
             _indicator = new Panel { Height = 2, BackColor = Theme.Accent };
             tabBar.Controls.Add(_tabGeneral);
             tabBar.Controls.Add(_tabBackup);
@@ -296,8 +301,8 @@ namespace SteamScreenshotBackup
             Controls.Add(tabEdge);
             Controls.Add(tabBar);
 
-            AcceptButton = save;
-            CancelButton = cancel;
+            AcceptButton = apply;
+            CancelButton = close;
 
             // Size the window so the taller page shows without scrolling.
             int content = Math.Max(generalBottom, backupBottom);
@@ -376,14 +381,14 @@ namespace SteamScreenshotBackup
                     "Deleted files go to the Windows Recycle Bin, so you can recover them until it is " +
                     "emptied \u2014 but this still changes Steam's own screenshot folder.\n\n" +
                     "Are you sure you want to enable this?",
-                    "Enable a dangerous setting")
+                    "Enable a Dangerous Setting")
                 &&
                 MessageDialog.AskYesNo(
                     "Final confirmation.\n\n" +
                     "You are enabling automatic deletion of your original Steam screenshots after they " +
                     "are backed up. This changes Steam's own files.\n\n" +
                     "Do you explicitly confirm you want this?",
-                    "Are you absolutely sure?");
+                    "Are You Absolutely Sure?");
 
             if (!ok)
             {
@@ -396,7 +401,7 @@ namespace SteamScreenshotBackup
         private void RunPurgeOriginals()
         {
             var engine = _app.Engine;
-            ProgressWindow.Run(this, "Deleting originals\u2026",
+            ProgressWindow.Run(this, "Deleting Originals\u2026",
                 "Sending imported originals to the Recycle Bin\u2026",
                 progress => engine.PurgeImportedOriginals(progress));
         }
@@ -404,7 +409,7 @@ namespace SteamScreenshotBackup
         private void RunMarkdownRebuild()
         {
             var engine = _app.Engine;
-            ProgressWindow.Run(this, "Generating index\u2026",
+            ProgressWindow.Run(this, "Generating Index\u2026",
                 "Writing _Screenshot_Log.md files\u2026",
                 progress => engine.RebuildMarkdownIndex(progress));
         }
@@ -412,7 +417,7 @@ namespace SteamScreenshotBackup
         private void RunMarkdownDelete()
         {
             var engine = _app.Engine;
-            ProgressWindow.Run(this, "Deleting index\u2026",
+            ProgressWindow.Run(this, "Deleting Index\u2026",
                 "Sending _Screenshot_Log.md files to the Recycle Bin\u2026",
                 progress => engine.DeleteMarkdownIndexes(progress));
         }
@@ -432,7 +437,7 @@ namespace SteamScreenshotBackup
         private void RunTypeDelete(ScreenshotType type)
         {
             var engine = _app.Engine;
-            ProgressWindow.Run(this, "Deleting backups\u2026",
+            ProgressWindow.Run(this, "Deleting Backups\u2026",
                 $"Sending {BackupEngine.TypeLabel(type)} backups to the Recycle Bin\u2026",
                 progress => engine.DeleteTypeBackups(type));
         }
@@ -509,7 +514,7 @@ namespace SteamScreenshotBackup
                     "Move your existing backup files to the new location?\n\n" +
                     "Choosing No leaves the old files where they are and re-copies " +
                     "everything from Steam into the new folder on the next scan.",
-                    "Migrate existing backup");
+                    "Migrate Existing Backup");
                 _settings.Destination = newDest;
                 if (migrate) RunMigration(oldDest, newDest);
             }
@@ -528,7 +533,7 @@ namespace SteamScreenshotBackup
                     if (plan.Count > 0)
                     {
                         applyTemplate = PreviewWindow.Confirm(
-                            "Preview reorganization",
+                            "Preview Reorganization",
                             $"{plan.Count} file{(plan.Count == 1 ? "" : "s")} will be moved to match the new layout:",
                             plan, "Reorganize");
                         if (applyTemplate)
@@ -541,20 +546,20 @@ namespace SteamScreenshotBackup
                 if (applyTemplate) _settings.FolderTemplate = newTemplate;
             }
 
-            LogSettingChange("Backup folder", oldDest, _settings.Destination);
-            LogSettingChange("Folder layout", oldTemplate, _settings.FolderTemplate);
-            LogSettingChange("High-resolution folder override",
+            LogSettingChange("Backup Folder", oldDest, _settings.Destination);
+            LogSettingChange("Folder Layout", oldTemplate, _settings.FolderTemplate);
+            LogSettingChange("High-Resolution Folder Override",
                 oldOverride.Length == 0 ? "(auto-detect)" : oldOverride,
                 _settings.HighResFolderOverride ?? "(auto-detect)");
-            LogSettingChange("Backup standard screenshots", oldStandard, _settings.BackupStandard);
-            LogSettingChange("Backup high-resolution screenshots", oldHighRes, _settings.BackupHighRes);
-            LogSettingChange("Automatically restore deleted files", oldAutoRestore, _settings.AutoRestore);
-            LogSettingChange("Show popup notifications", oldShowNotifications, _settings.ShowNotifications);
-            LogSettingChange("Generate Markdown index", oldMarkdownIndex, _settings.GenerateMarkdownIndex);
-            LogSettingChange("Preview before import", oldPreviewImport, _settings.PreviewBeforeImport);
-            LogSettingChange("Delete originals after import", oldDeleteOriginals, _settings.DeleteOriginals);
+            LogSettingChange("Backup Standard Screenshots", oldStandard, _settings.BackupStandard);
+            LogSettingChange("Backup High-Resolution Screenshots", oldHighRes, _settings.BackupHighRes);
+            LogSettingChange("Automatic Restore", oldAutoRestore, _settings.AutoRestore);
+            LogSettingChange("Show Notifications", oldShowNotifications, _settings.ShowNotifications);
+            LogSettingChange("Markdown Index", oldMarkdownIndex, _settings.GenerateMarkdownIndex);
+            LogSettingChange("Preview Before Import", oldPreviewImport, _settings.PreviewBeforeImport);
+            LogSettingChange("Delete Originals", oldDeleteOriginals, _settings.DeleteOriginals);
             LogSettingChange("Theme", oldTheme, _settings.Theme);
-            LogSettingChange("Start with Windows", oldAutoStart, _autoStart.Checked);
+            LogSettingChange("Start With Windows", oldAutoStart, _autoStart.Checked);
 
             _settings.Save();
             Theme.SetMode(_settings.Theme);
@@ -564,13 +569,13 @@ namespace SteamScreenshotBackup
             if (standardTurnedOff && TypeBackupExists(ScreenshotType.Standard) && MessageDialog.AskYesNo(
                     "You turned off Standard screenshots. Delete the existing Standard backup files?\n\n" +
                     "They will be sent to the Windows Recycle Bin (recoverable). Choose No to keep them.",
-                    "Delete Standard backups?"))
+                    "Delete Standard Backups?"))
                 RunTypeDelete(ScreenshotType.Standard);
 
             if (highResTurnedOff && TypeBackupExists(ScreenshotType.HighRes) && MessageDialog.AskYesNo(
                     "You turned off High-resolution screenshots. Delete the existing High Resolution backup files?\n\n" +
                     "They will be sent to the Windows Recycle Bin (recoverable). Choose No to keep them.",
-                    "Delete High Resolution backups?"))
+                    "Delete High Resolution Backups?"))
                 RunTypeDelete(ScreenshotType.HighRes);
 
             // Newly enabled markdown index: offer to generate it for existing folders.
@@ -578,7 +583,7 @@ namespace SteamScreenshotBackup
                     "Generate the Markdown index for your existing backup folders now?\n\n" +
                     "This writes a _Screenshot_Log.md into each game folder covering the screenshots " +
                     "already backed up. Choose No to only index screenshots backed up from here on.",
-                    "Generate index for existing folders?"))
+                    "Generate Index for Existing Folders?"))
             {
                 RunMarkdownRebuild();
             }
@@ -587,7 +592,7 @@ namespace SteamScreenshotBackup
             if (markdownTurnedOff && _app.Engine.MarkdownIndexExists() && MessageDialog.AskYesNo(
                     "You turned off the Markdown index. Delete the existing _Screenshot_Log.md files?\n\n" +
                     "They will be sent to the Windows Recycle Bin (recoverable). Choose No to leave them in place.",
-                    "Delete Markdown index files?"))
+                    "Delete Markdown Index Files?"))
             {
                 RunMarkdownDelete();
             }
@@ -597,21 +602,18 @@ namespace SteamScreenshotBackup
                     "Also delete originals that were already imported?\n\n" +
                     "This sends every original that already has a backup to the Recycle Bin now. " +
                     "Choose No to only delete originals of screenshots imported from here on.",
-                    "Apply to already-imported screenshots?"))
+                    "Apply to Already-Imported Screenshots?"))
             {
                 RunPurgeOriginals();
             }
-
-            DialogResult = DialogResult.OK;
-            Close();
         }
 
         // Audit trail for Settings: one info-level log line per field that actually
-        // changed, naming the field and its new value. Silent when unchanged.
+        // changed, naming the field and its old and new values. Silent when unchanged.
         private static void LogSettingChange<T>(string name, T oldValue, T newValue)
         {
             if (!Equals(oldValue, newValue))
-                Logger.Log($"Setting changed: {name} = {newValue}");
+                Logger.Log($"Setting '{name}' changed to '{newValue}' (was '{oldValue}')");
         }
 
         private static bool BackupExists(string dest)
@@ -630,7 +632,7 @@ namespace SteamScreenshotBackup
         private void RunMigration(string oldDest, string newDest)
         {
             var engine = _app.Engine;
-            ProgressWindow.Run(this, "Migrating backup\u2026", "Moving files\u2026",
+            ProgressWindow.Run(this, "Migrating Backup\u2026", "Moving files\u2026",
                 progress => engine.MoveBackup(oldDest, newDest, progress));
         }
     }

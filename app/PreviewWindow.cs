@@ -63,6 +63,7 @@ namespace SteamScreenshotBackup
             _list.DrawColumnHeader += DrawHeader;
             _list.DrawSubItem += DrawSubItem;
             Theme.ApplyScrollbars(_list);
+            Theme.EnableDoubleBuffer(_list);
 
             _list.BeginUpdate();
             var items = new ListViewItem[rows.Count];

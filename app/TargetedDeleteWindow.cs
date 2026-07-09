@@ -26,7 +26,7 @@ namespace SteamScreenshotBackup
         {
             _engine = engine;
 
-            Text = "Delete specific files/folders";
+            Text = "Granular Deletion";
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(640, 560);
             MinimumSize = new Size(480, 380);
@@ -36,7 +36,7 @@ namespace SteamScreenshotBackup
             var top = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Theme.Panel };
             top.Controls.Add(new Label
             {
-                Text = "Choose backup files to delete",
+                Text = "Choose Backup Files to Delete",
                 Font = Theme.HeaderFont,
                 ForeColor = Theme.Text,
                 AutoSize = true,
@@ -84,7 +84,7 @@ namespace SteamScreenshotBackup
 
             _deleteBtn = new Button
             {
-                Text = "Delete selected",
+                Text = "Delete Selected",
                 Size = new Size(140, 32),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
                 Enabled = false
@@ -120,10 +120,15 @@ namespace SteamScreenshotBackup
                 var typeNode = new TreeNode { Tag = null };
                 foreach (var kv in byGame)
                 {
-                    var gameNode = new TreeNode($"{kv.Key}  ({kv.Value.Count})") { Tag = null };
-                    foreach (var file in kv.Value)
+                    var gameNode = new TreeNode($"{kv.Key}  ({kv.Value.Count})")
+                        { Tag = null, BackColor = Theme.Panel, ForeColor = Theme.TextDim };
+                    for (int i = 0; i < kv.Value.Count; i++)
+                    {
+                        var file = kv.Value[i];
                         gameNode.Nodes.Add(new TreeNode(
-                            $"{file.Name}  ({MainWindow.FormatBytes(file.Size)})") { Tag = file });
+                            $"{file.Name}  ({MainWindow.FormatBytes(file.Size)})")
+                            { Tag = file, BackColor = i % 2 == 0 ? Theme.Background : Theme.RowAlt });
+                    }
                     typeNode.Nodes.Add(gameNode);
                     typeFiles += kv.Value.Count;
                 }
@@ -219,7 +224,7 @@ namespace SteamScreenshotBackup
 
             var paths = files.ConvertAll(f => f.Path);
             var engine = _engine;
-            ProgressWindow.Run(this, "Deleting selected files\u2026", "Sending selected files to the Recycle Bin\u2026",
+            ProgressWindow.Run(this, "Deleting Selected Files\u2026", "Sending selected files to the Recycle Bin\u2026",
                 progress => engine.DeleteFiles(paths, progress));
 
             Populate();

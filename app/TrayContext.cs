@@ -56,7 +56,7 @@ namespace SteamScreenshotBackup
 
             _menu.Items.Add("Settings", null, (s, e) => ShowSettings(null));
             _menu.Items.Add(new ToolStripSeparator());
-            _menu.Items.Add("Uninstall\u2026", null, (s, e) => Uninstall());
+            _menu.Items.Add("Uninstall", null, (s, e) => Uninstall());
             _menu.Items.Add("Exit", null, (s, e) => ExitApp());
             Theme.Changed += () => _menu.Renderer = Theme.MenuRenderer;
 
@@ -219,7 +219,7 @@ namespace SteamScreenshotBackup
                         if (plan.Count > 0)
                         {
                             bool proceed = OnUiSync(() => PreviewWindow.Confirm(
-                                "Preview import",
+                                "Preview Import",
                                 $"{plan.Count} screenshot{(plan.Count == 1 ? "" : "s")} will be imported into your backup:",
                                 plan, "Import"));
                             if (!proceed)

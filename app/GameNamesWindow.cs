@@ -61,10 +61,13 @@ namespace SteamScreenshotBackup
             _grid.DefaultCellStyle.ForeColor = Theme.Text;
             _grid.DefaultCellStyle.SelectionBackColor = Theme.Selection;
             _grid.DefaultCellStyle.SelectionForeColor = Theme.Text;
+            _grid.AlternatingRowsDefaultCellStyle.BackColor = Theme.RowAlt;
+            _grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = Theme.Selection;
+            _grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = Theme.Text;
             Theme.ApplyScrollbars(_grid);
 
             var colId = new DataGridViewTextBoxColumn { HeaderText = "App ID", FillWeight = 30 };
-            var colName = new DataGridViewTextBoxColumn { HeaderText = "Game name", FillWeight = 70 };
+            var colName = new DataGridViewTextBoxColumn { HeaderText = "Game Name", FillWeight = 70 };
             _grid.Columns.Add(colId);
             _grid.Columns.Add(colName);
 
@@ -74,7 +77,7 @@ namespace SteamScreenshotBackup
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Theme.Panel };
             var footerEdge = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.PanelEdge };
 
-            var remove = new Button { Text = "Remove selected", Size = new Size(140, 32), Location = new Point(14, 12) };
+            var remove = new Button { Text = "Remove Selected", Size = new Size(140, 32), Location = new Point(14, 12) };
             Theme.StyleButton(remove);
             remove.Click += (s, e) =>
             {
@@ -84,7 +87,7 @@ namespace SteamScreenshotBackup
             footer.Controls.Add(remove);
 
             var openFile = new Button
-                { Text = "Open tracking file", Size = new Size(140, 32), Location = new Point(164, 12) };
+                { Text = "Open Tracking File", Size = new Size(140, 32), Location = new Point(164, 12) };
             Theme.StyleButton(openFile);
             openFile.Click += (s, e) => OpenTrackingFile();
             footer.Controls.Add(openFile);
