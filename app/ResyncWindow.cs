@@ -79,6 +79,7 @@ namespace SteamScreenshotBackup
                 ItemHeight = 22
             };
             _tree.AfterCheck += OnAfterCheck;
+            Theme.ApplyScrollbars(_tree);
 
             // ----- bottom bar -----
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Theme.Panel };

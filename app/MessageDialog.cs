@@ -16,6 +16,26 @@ namespace SteamScreenshotBackup
         public static bool AskYesNo(string text, string title = "Steam Screenshot Backup")
             => Show(text, title, Theme.Accent, "Yes", "No") == DialogResult.OK;
 
+        // Mandatory second-look confirmation before any deletion (bulk or targeted):
+        // always states exactly how many files and how much data are about to be sent
+        // to the Recycle Bin. Returns false (with an info dialog, not a confirmation)
+        // when there is nothing to delete.
+        public static bool ConfirmDeletion(string action, int count, long bytes,
+            string title = "Confirm deletion")
+        {
+            if (count == 0)
+            {
+                Info($"Nothing to delete - {action} found no matching files.");
+                return false;
+            }
+            return AskYesNo(
+                $"{action}\n\n" +
+                $"This will delete {count} file{(count == 1 ? "" : "s")} " +
+                $"({MainWindow.FormatBytes(bytes)}), sent to the Windows Recycle Bin (recoverable).\n\n" +
+                "Continue?",
+                title);
+        }
+
         private static DialogResult Show(string text, string title, Color stripe,
             string okText, string cancelText)
         {

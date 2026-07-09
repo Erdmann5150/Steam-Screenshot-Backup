@@ -39,12 +39,13 @@ namespace SteamScreenshotBackup
 
             _menu = new ContextMenuStrip { Renderer = Theme.MenuRenderer };
             _menu.Items.Add("Open " + AppName, null, (s, e) => MainWindow.ShowWindow(this));
-            _menu.Items.Add("Back up now", null, (s, e) => BackUpNow());
-            _menu.Items.Add("Re-sync missing screenshots\u2026", null, (s, e) => ResyncWindow.ShowWindow(_engine));
-            _menu.Items.Add("Open backup folder", null, (s, e) => OpenBackupFolder());
+            _menu.Items.Add("Backup Now", null, (s, e) => BackUpNow());
+            _menu.Items.Add("Re-Sync", null, (s, e) => ResyncWindow.ShowWindow(_engine));
+            _menu.Items.Add("Open Backup Folder", null, (s, e) => OpenBackupFolder());
+            _menu.Items.Add("Game Names", null, (s, e) => OpenGameNames());
             _menu.Items.Add(new ToolStripSeparator());
 
-            _pauseItem = new ToolStripMenuItem("Pause watching") { CheckOnClick = true };
+            _pauseItem = new ToolStripMenuItem("Pause Monitoring") { CheckOnClick = true };
             _pauseItem.CheckedChanged += (s, e) => ApplyPause(_pauseItem.Checked);
             _menu.Items.Add(_pauseItem);
 
@@ -53,7 +54,7 @@ namespace SteamScreenshotBackup
             _autoStartItem.CheckedChanged += (s, e) => WriteAutoStart(_autoStartItem.Checked);
             _menu.Items.Add(_autoStartItem);
 
-            _menu.Items.Add("Settings\u2026", null, (s, e) => ShowSettings(null));
+            _menu.Items.Add("Settings", null, (s, e) => ShowSettings(null));
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add("Uninstall\u2026", null, (s, e) => Uninstall());
             _menu.Items.Add("Exit", null, (s, e) => ExitApp());
@@ -174,6 +175,12 @@ namespace SteamScreenshotBackup
             using var dlg = new SettingsWindow(this, _settings);
             if (owner != null) dlg.ShowDialog(owner);
             else dlg.ShowDialog();
+        }
+
+        public void OpenGameNames()
+        {
+            using var dlg = new GameNamesWindow(_engine.Resolver);
+            dlg.ShowDialog();
         }
 
         // Called by SettingsWindow after saving; restarts watchers when sources or

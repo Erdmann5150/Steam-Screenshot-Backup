@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -59,6 +61,7 @@ namespace SteamScreenshotBackup
             _grid.DefaultCellStyle.ForeColor = Theme.Text;
             _grid.DefaultCellStyle.SelectionBackColor = Theme.Selection;
             _grid.DefaultCellStyle.SelectionForeColor = Theme.Text;
+            Theme.ApplyScrollbars(_grid);
 
             var colId = new DataGridViewTextBoxColumn { HeaderText = "App ID", FillWeight = 30 };
             var colName = new DataGridViewTextBoxColumn { HeaderText = "Game name", FillWeight = 70 };
@@ -79,6 +82,12 @@ namespace SteamScreenshotBackup
                     if (!row.IsNewRow) _grid.Rows.Remove(row);
             };
             footer.Controls.Add(remove);
+
+            var openFile = new Button
+                { Text = "Open tracking file", Size = new Size(140, 32), Location = new Point(164, 12) };
+            Theme.StyleButton(openFile);
+            openFile.Click += (s, e) => OpenTrackingFile();
+            footer.Controls.Add(openFile);
 
             var cancel = new Button
             {
@@ -107,6 +116,25 @@ namespace SteamScreenshotBackup
             Controls.Add(footerEdge);
             Controls.Add(footer);
             CancelButton = cancel;
+        }
+
+        private void OpenTrackingFile()
+        {
+            string path = _resolver.CacheFilePath;
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    MessageDialog.Info("No tracking file has been written yet.");
+                    return;
+                }
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Could not open tracking file: " + ex.Message);
+                try { Process.Start("explorer.exe", $"/select,\"{path}\""); } catch { }
+            }
         }
 
         private void SaveChanges()

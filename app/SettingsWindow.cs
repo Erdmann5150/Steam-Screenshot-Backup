@@ -7,8 +7,10 @@ using System.Windows.Forms;
 
 namespace SteamScreenshotBackup
 {
-    // All app configuration in one place. Changes are applied when Save is clicked;
-    // destination and layout changes offer to migrate/reorganize existing backups.
+    // All app configuration in one place, split across two tabs (General / Backup
+    // configuration) so the window fits its content without a scrollbar. Changes are
+    // applied when Save is clicked; destination and layout changes offer to migrate
+    // or reorganize existing backups.
     internal class SettingsWindow : Form
     {
         private static readonly (string Label, string Template)[] LayoutPresets =
@@ -30,6 +32,10 @@ namespace SteamScreenshotBackup
         private readonly ComboBox _layout, _theme;
         private bool _suppressDangerPrompt;   // guards the enable-confirmation loop
 
+        // Tab state.
+        private readonly Panel _generalPage, _backupPage, _indicator;
+        private readonly Button _tabGeneral, _tabBackup;
+
         public SettingsWindow(TrayContext app, Settings settings)
         {
             _app = app;
@@ -41,244 +47,10 @@ namespace SteamScreenshotBackup
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(577, 640);
-            AutoScroll = true;   // the settings list has outgrown a fixed height
+            ClientSize = new Size(577, 600);   // provisional; final height set after layout
             Theme.ApplyWindow(this);
 
-            int y = 20;
-            Label Section(string text)
-            {
-                var l = new Label
-                {
-                    Text = text,
-                    Font = Theme.HeaderFont,
-                    ForeColor = Theme.TextDim,
-                    AutoSize = true,
-                    Location = new Point(24, y)
-                };
-                Controls.Add(l);
-                y += 22;
-                return l;
-            }
-
-            // ----- backup folder -----
-            Section("BACKUP FOLDER");
-            _dest = new TextBox
-            {
-                Text = _settings.Destination,
-                Location = new Point(24, y),
-                Width = 408,
-                BorderStyle = BorderStyle.FixedSingle
-            };
-            Theme.StyleInput(_dest);
-            var browse = new Button { Text = "Browse\u2026", Size = new Size(92, _dest.Height + 2) };
-            browse.Location = new Point(440, y - 1);
-            Theme.StyleButton(browse);
-            browse.Click += (s, e) => Browse();
-            Controls.Add(_dest);
-            Controls.Add(browse);
-            y += 44;
-
-            // ----- what to back up -----
-            Section("WHAT TO BACK UP");
-            _standard = new CheckBox
-            {
-                Text = "Standard screenshots (Steam's compressed library copies)",
-                Checked = _settings.BackupStandard,
-                AutoSize = true,
-                Location = new Point(24, y),
-                ForeColor = Theme.Text
-            };
-            Controls.Add(_standard);
-            y += 28;
-            _highRes = new CheckBox
-            {
-                Text = "High-resolution screenshots (Steam's \"save an external copy\" files)",
-                Checked = _settings.BackupHighRes,
-                AutoSize = true,
-                Location = new Point(24, y),
-                ForeColor = Theme.Text
-            };
-            Controls.Add(_highRes);
-            y += 30;
-
-            // Manual high-resolution folder \u2014 used when Steam's config doesn't reveal
-            // one (or to add an extra location). Placeholder shows the auto-detected path.
-            string detected = _app.Engine.AutoDetectedHighResFolder;
-            var hrCaption = new Label
-            {
-                Text = detected != null
-                    ? "High-resolution folder (auto-detected; set only to use a different one):"
-                    : "High-resolution folder (not auto-detected \u2014 set it here if you use external copies):",
-                Font = Theme.SmallFont,
-                ForeColor = Theme.TextDim,
-                AutoSize = true,
-                Location = new Point(42, y)
-            };
-            Controls.Add(hrCaption);
-            y += 20;
-
-            _highResFolder = new TextBox
-            {
-                Text = _settings.HighResFolderOverride ?? "",
-                Location = new Point(42, y),
-                Width = 390,
-                BorderStyle = BorderStyle.FixedSingle
-            };
-            if (detected != null) _highResFolder.PlaceholderText = detected;
-            Theme.StyleInput(_highResFolder);
-            var hrBrowse = new Button { Text = "Browse\u2026", Size = new Size(92, _highResFolder.Height + 2) };
-            hrBrowse.Location = new Point(440, y - 1);
-            Theme.StyleButton(hrBrowse);
-            hrBrowse.Click += (s, e) => BrowseHighRes();
-            Controls.Add(_highResFolder);
-            Controls.Add(hrBrowse);
-            y += 42;
-
-            // ----- folder layout -----
-            Section("FOLDER LAYOUT (INSIDE EACH TYPE FOLDER)");
-            _layout = new ComboBox
-            {
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                FlatStyle = FlatStyle.Flat,
-                Width = 260,
-                Location = new Point(24, y)
-            };
-            Theme.StyleInput(_layout);
-            foreach (var p in LayoutPresets) _layout.Items.Add(p.Label);
-            int idx = Array.FindIndex(LayoutPresets, p => p.Template == (_settings.FolderTemplate ?? "{game}"));
-            _layout.SelectedIndex = idx >= 0 ? idx : 0;
-            Controls.Add(_layout);
-            y += 44;
-
-            // ----- importing / index -----
-            Section("IMPORTING");
-            _markdownIndex = new CheckBox
-            {
-                Text = "Generate a Markdown index (_Screenshot_Log.md) in each folder",
-                Checked = _settings.GenerateMarkdownIndex,
-                AutoSize = true,
-                Location = new Point(24, y),
-                ForeColor = Theme.Text
-            };
-            Controls.Add(_markdownIndex);
-            y += 28;
-            _previewImport = new CheckBox
-            {
-                Text = "Preview a list of changes before importing batches",
-                Checked = _settings.PreviewBeforeImport,
-                AutoSize = true,
-                Location = new Point(24, y),
-                ForeColor = Theme.Text
-            };
-            Controls.Add(_previewImport);
-            y += 26;
-            Controls.Add(new Label
-            {
-                Text = "Real-time captures during play are never interrupted; this only affects batch scans.",
-                Font = Theme.SmallFont,
-                ForeColor = Theme.TextDim,
-                AutoSize = true,
-                Location = new Point(42, y)
-            });
-            y += 34;
-
-            // ----- appearance / startup -----
-            Section("APPEARANCE");
-            _theme = new ComboBox
-            {
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                FlatStyle = FlatStyle.Flat,
-                Width = 260,
-                Location = new Point(24, y)
-            };
-            Theme.StyleInput(_theme);
-            _theme.Items.AddRange(new object[] { "Dark", "Light", "Follow Windows setting" });
-            _theme.SelectedIndex = _settings.Theme switch
-            {
-                ThemeMode.Light => 1,
-                ThemeMode.System => 2,
-                _ => 0
-            };
-            Controls.Add(_theme);
-            y += 40;
-
-            _showNotifications = new CheckBox
-            {
-                Text = "Show popup notifications",
-                Checked = _settings.ShowNotifications,
-                AutoSize = true,
-                Location = new Point(24, y),
-                ForeColor = Theme.Text
-            };
-            Controls.Add(_showNotifications);
-            y += 36;
-
-            Section("STARTUP");
-            _autoStart = new CheckBox
-            {
-                Text = "Start automatically when I sign in to Windows",
-                Checked = _app.IsAutoStartEnabled,
-                AutoSize = true,
-                Location = new Point(24, y),
-                ForeColor = Theme.Text
-            };
-            Controls.Add(_autoStart);
-            y += 34;
-
-            Section("DELETED-FILE PROTECTION");
-            _autoRestore = new CheckBox
-            {
-                Text = "Automatically restore files deleted from the backup",
-                Checked = _settings.AutoRestore,
-                AutoSize = true,
-                Location = new Point(24, y),
-                ForeColor = Theme.Text
-            };
-            Controls.Add(_autoRestore);
-            y += 26;
-            Controls.Add(new Label
-            {
-                Text = "When off, deletions are only logged \u2014 recover them yourself from \"Re-sync missing\".",
-                Font = Theme.SmallFont,
-                ForeColor = Theme.TextDim,
-                AutoSize = true,
-                Location = new Point(42, y)
-            });
-            y += 38;
-
-            // ----- danger zone -----
-            Controls.Add(new Label
-            {
-                Text = "DANGER ZONE",
-                Font = Theme.HeaderFont,
-                ForeColor = Theme.Error,
-                AutoSize = true,
-                Location = new Point(24, y)
-            });
-            y += 22;
-            _deleteOriginals = new CheckBox
-            {
-                Text = "Delete original Steam screenshots after import",
-                Checked = _settings.DeleteOriginals,
-                AutoSize = true,
-                Location = new Point(24, y),
-                ForeColor = Theme.Error
-            };
-            _deleteOriginals.CheckedChanged += OnDeleteOriginalsToggled;
-            Controls.Add(_deleteOriginals);
-            y += 26;
-            Controls.Add(new Label
-            {
-                Text = "Removes each original from Steam once it is safely backed up. Files go to the\n" +
-                       "Windows Recycle Bin (recoverable), not permanent deletion.",
-                Font = Theme.SmallFont,
-                ForeColor = Theme.TextDim,
-                AutoSize = true,
-                Location = new Point(42, y)
-            });
-
-            // ----- footer -----
+            // ----- footer (built first so anchored buttons settle to the right edge) -----
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 60, BackColor = Theme.Panel };
             var footerEdge = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.PanelEdge };
 
@@ -310,10 +82,254 @@ namespace SteamScreenshotBackup
             save.Click += (s, e) => SaveChanges();
             footer.Controls.Add(save);
 
+            // ----- content host + two pages -----
+            var contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+            _generalPage = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Background };
+            _backupPage = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Background, Visible = false };
+            Theme.ApplyScrollbars(_generalPage);
+            Theme.ApplyScrollbars(_backupPage);
+            contentHost.Controls.Add(_generalPage);
+            contentHost.Controls.Add(_backupPage);
+
+            // Shared builder: local functions capture `page` and `y`, which are reset
+            // between the two pages so the same layout helpers serve both.
+            Panel page = _generalPage;
+            int y = 20;
+            void Section(string text)
+            {
+                page.Controls.Add(new Label
+                {
+                    Text = text,
+                    Font = Theme.HeaderFont,
+                    ForeColor = Theme.TextDim,
+                    AutoSize = true,
+                    Location = new Point(24, y)
+                });
+                y += 22;
+            }
+            Label Hint(string text, int x = 42)
+            {
+                var l = new Label
+                {
+                    Text = text,
+                    Font = Theme.SmallFont,
+                    ForeColor = Theme.TextDim,
+                    AutoSize = true,
+                    Location = new Point(x, y)
+                };
+                page.Controls.Add(l);
+                return l;
+            }
+            CheckBox Check(CheckBox box, string text, bool value, Color color)
+            {
+                box.Text = text;
+                box.Checked = value;
+                box.AutoSize = true;
+                box.Location = new Point(24, y);
+                box.ForeColor = color;
+                page.Controls.Add(box);
+                return box;
+            }
+
+            // ============================ GENERAL ============================
+            page = _generalPage; y = 20;
+
+            Section("APPEARANCE");
+            _theme = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Flat,
+                Width = 260,
+                Location = new Point(24, y)
+            };
+            Theme.StyleInput(_theme);
+            _theme.Items.AddRange(new object[] { "Dark", "Light", "Follow Windows setting" });
+            _theme.SelectedIndex = _settings.Theme switch
+            {
+                ThemeMode.Light => 1,
+                ThemeMode.System => 2,
+                _ => 0
+            };
+            page.Controls.Add(_theme);
+            y += 40;
+
+            _showNotifications = new CheckBox();
+            Check(_showNotifications, "Show popup notifications", _settings.ShowNotifications, Theme.Text);
+            y += 40;
+
+            Section("STARTUP");
+            _autoStart = new CheckBox();
+            Check(_autoStart, "Start automatically when I sign in to Windows", _app.IsAutoStartEnabled, Theme.Text);
+            y += 40;
+
+            Section("IMPORTING");
+            _markdownIndex = new CheckBox();
+            Check(_markdownIndex, "Generate a Markdown index (_Screenshot_Log.md) in each folder",
+                _settings.GenerateMarkdownIndex, Theme.Text);
+            y += 28;
+            _previewImport = new CheckBox();
+            Check(_previewImport, "Preview a list of changes before importing batches",
+                _settings.PreviewBeforeImport, Theme.Text);
+            y += 26;
+            Hint("Real-time captures during play are never interrupted; this only affects batch scans.");
+            y += 40;
+
+            Section("DELETED-FILE PROTECTION");
+            _autoRestore = new CheckBox();
+            Check(_autoRestore, "Automatically restore files deleted from the backup",
+                _settings.AutoRestore, Theme.Text);
+            y += 26;
+            Hint("When off, deletions are only logged \u2014 recover them yourself from \"Re-sync missing\".");
+            y += 28;
+            int generalBottom = y;
+
+            // ======================= BACKUP CONFIGURATION =======================
+            page = _backupPage; y = 20;
+
+            Section("BACKUP FOLDER");
+            _dest = new TextBox
+            {
+                Text = _settings.Destination,
+                Location = new Point(24, y),
+                Width = 408,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            Theme.StyleInput(_dest);
+            var browse = new Button { Text = "Browse\u2026", Size = new Size(92, _dest.Height + 2) };
+            browse.Location = new Point(440, y - 1);
+            Theme.StyleButton(browse);
+            browse.Click += (s, e) => Browse();
+            page.Controls.Add(_dest);
+            page.Controls.Add(browse);
+            y += 44;
+
+            Section("WHAT TO BACK UP");
+            _standard = new CheckBox();
+            Check(_standard, "Standard screenshots (Steam's compressed library copies)",
+                _settings.BackupStandard, Theme.Text);
+            y += 28;
+            _highRes = new CheckBox();
+            Check(_highRes, "High-resolution screenshots (Steam's \"save an external copy\" files)",
+                _settings.BackupHighRes, Theme.Text);
+            y += 30;
+
+            // Manual high-resolution folder \u2014 used when Steam's config doesn't reveal
+            // one (or to add an extra location). Placeholder shows the auto-detected path.
+            string detected = _app.Engine.AutoDetectedHighResFolder;
+            Hint(detected != null
+                ? "High-resolution folder (auto-detected; set only to use a different one):"
+                : "High-resolution folder (not auto-detected \u2014 set it here if you use external copies):");
+            y += 20;
+            _highResFolder = new TextBox
+            {
+                Text = _settings.HighResFolderOverride ?? "",
+                Location = new Point(42, y),
+                Width = 390,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            if (detected != null) _highResFolder.PlaceholderText = detected;
+            Theme.StyleInput(_highResFolder);
+            var hrBrowse = new Button { Text = "Browse\u2026", Size = new Size(92, _highResFolder.Height + 2) };
+            hrBrowse.Location = new Point(440, y - 1);
+            Theme.StyleButton(hrBrowse);
+            hrBrowse.Click += (s, e) => BrowseHighRes();
+            page.Controls.Add(_highResFolder);
+            page.Controls.Add(hrBrowse);
+            y += 42;
+
+            Section("FOLDER LAYOUT (INSIDE EACH TYPE FOLDER)");
+            _layout = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Flat,
+                Width = 260,
+                Location = new Point(24, y)
+            };
+            Theme.StyleInput(_layout);
+            foreach (var p in LayoutPresets) _layout.Items.Add(p.Label);
+            int idx = Array.FindIndex(LayoutPresets, p => p.Template == (_settings.FolderTemplate ?? "{game}"));
+            _layout.SelectedIndex = idx >= 0 ? idx : 0;
+            page.Controls.Add(_layout);
+            y += 46;
+
+            // ----- danger zone -----
+            page.Controls.Add(new Label
+            {
+                Text = "DANGER ZONE",
+                Font = Theme.HeaderFont,
+                ForeColor = Theme.Error,
+                AutoSize = true,
+                Location = new Point(24, y)
+            });
+            y += 22;
+            _deleteOriginals = new CheckBox();
+            Check(_deleteOriginals, "Delete original Steam screenshots after import",
+                _settings.DeleteOriginals, Theme.Error);
+            _deleteOriginals.CheckedChanged += OnDeleteOriginalsToggled;
+            y += 26;
+            Hint("Removes each original from Steam once it is safely backed up. Files go to the\n" +
+                 "Windows Recycle Bin (recoverable), not permanent deletion.");
+            y += 44;
+            int backupBottom = y;
+
+            // ----- tab bar -----
+            var tabBar = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = Theme.Panel };
+            var tabEdge = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.PanelEdge };
+            _tabGeneral = MakeTab("General", 8, 132);
+            _tabBackup = MakeTab("Backup configuration", 8 + 132, 200);
+            _indicator = new Panel { Height = 2, BackColor = Theme.Accent };
+            tabBar.Controls.Add(_tabGeneral);
+            tabBar.Controls.Add(_tabBackup);
+            tabBar.Controls.Add(_indicator);
+            _tabGeneral.Click += (s, e) => SelectTab(0);
+            _tabBackup.Click += (s, e) => SelectTab(1);
+
+            // ----- assemble (Fill first, then outer bars) -----
+            Controls.Add(contentHost);
             Controls.Add(footerEdge);
             Controls.Add(footer);
+            Controls.Add(tabEdge);
+            Controls.Add(tabBar);
+
             AcceptButton = save;
             CancelButton = cancel;
+
+            // Size the window so the taller page shows without scrolling.
+            int content = Math.Max(generalBottom, backupBottom);
+            ClientSize = new Size(577, 46 + 1 + content + 1 + 60);
+
+            SelectTab(0);
+        }
+
+        private Button MakeTab(string text, int x, int width)
+        {
+            var b = new Button
+            {
+                Text = text,
+                Size = new Size(width, 44),
+                Location = new Point(x, 0),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Panel,
+                ForeColor = Theme.TextDim,
+                Font = Theme.BaseFont,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            b.FlatAppearance.BorderSize = 0;
+            b.FlatAppearance.MouseOverBackColor = Theme.Selection;
+            b.FlatAppearance.MouseDownBackColor = Theme.Selection;
+            b.UseVisualStyleBackColor = false;
+            return b;
+        }
+
+        private void SelectTab(int i)
+        {
+            _generalPage.Visible = i == 0;
+            _backupPage.Visible = i == 1;
+            _tabGeneral.ForeColor = i == 0 ? Theme.Text : Theme.TextDim;
+            _tabBackup.ForeColor = i == 1 ? Theme.Text : Theme.TextDim;
+            var active = i == 0 ? _tabGeneral : _tabBackup;
+            _indicator.Bounds = new Rectangle(active.Left, 44, active.Width, 2);
         }
 
         private void Browse()
@@ -373,76 +389,26 @@ namespace SteamScreenshotBackup
 
         private void RunPurgeOriginals()
         {
-            var progress = new Form
-            {
-                Text = "Deleting originals\u2026",
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                ControlBox = false,
-                StartPosition = FormStartPosition.CenterParent,
-                ClientSize = new Size(380, 96)
-            };
-            Theme.ApplyWindow(progress);
-            var label = new Label
-            {
-                Text = "Sending imported originals to the Recycle Bin\u2026",
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Theme.Text
-            };
-            progress.Controls.Add(label);
-
             var engine = _app.Engine;
-            progress.Shown += (s, e) => Task.Run(() =>
-            {
-                try
-                {
-                    engine.PurgeImportedOriginals((done, total) =>
-                    {
-                        try { progress.BeginInvoke(new Action(() => label.Text = $"Recycling originals\u2026 {done} / {total}")); }
-                        catch { }
-                    });
-                }
-                catch (Exception ex) { Logger.Error("Purge of originals failed: " + ex.Message); }
-                finally { try { progress.BeginInvoke(new Action(progress.Close)); } catch { } }
-            });
-            progress.ShowDialog(this);
+            ProgressWindow.Run(this, "Deleting originals\u2026",
+                "Sending imported originals to the Recycle Bin\u2026",
+                progress => engine.PurgeImportedOriginals(progress));
         }
 
         private void RunMarkdownRebuild()
         {
-            var progress = new Form
-            {
-                Text = "Generating index\u2026",
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                ControlBox = false,
-                StartPosition = FormStartPosition.CenterParent,
-                ClientSize = new Size(380, 96)
-            };
-            Theme.ApplyWindow(progress);
-            var label = new Label
-            {
-                Text = "Writing _Screenshot_Log.md files\u2026",
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Theme.Text
-            };
-            progress.Controls.Add(label);
-
             var engine = _app.Engine;
-            progress.Shown += (s, e) => Task.Run(() =>
-            {
-                try
-                {
-                    engine.RebuildMarkdownIndex((done, total) =>
-                    {
-                        try { progress.BeginInvoke(new Action(() => label.Text = $"Writing index\u2026 {done} / {total} folders")); }
-                        catch { }
-                    });
-                }
-                catch (Exception ex) { Logger.Error("Markdown rebuild failed: " + ex.Message); }
-                finally { try { progress.BeginInvoke(new Action(progress.Close)); } catch { } }
-            });
-            progress.ShowDialog(this);
+            ProgressWindow.Run(this, "Generating index\u2026",
+                "Writing _Screenshot_Log.md files\u2026",
+                progress => engine.RebuildMarkdownIndex(progress));
+        }
+
+        private void RunMarkdownDelete()
+        {
+            var engine = _app.Engine;
+            ProgressWindow.Run(this, "Deleting index\u2026",
+                "Sending _Screenshot_Log.md files to the Recycle Bin\u2026",
+                progress => engine.DeleteMarkdownIndexes(progress));
         }
 
         private bool TypeBackupExists(ScreenshotType type)
@@ -459,31 +425,10 @@ namespace SteamScreenshotBackup
 
         private void RunTypeDelete(ScreenshotType type)
         {
-            var progress = new Form
-            {
-                Text = "Deleting backups\u2026",
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                ControlBox = false,
-                StartPosition = FormStartPosition.CenterParent,
-                ClientSize = new Size(400, 96)
-            };
-            Theme.ApplyWindow(progress);
-            progress.Controls.Add(new Label
-            {
-                Text = $"Sending {BackupEngine.TypeLabel(type)} backups to the Recycle Bin\u2026",
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Theme.Text
-            });
-
             var engine = _app.Engine;
-            progress.Shown += (s, e) => Task.Run(() =>
-            {
-                try { engine.DeleteTypeBackups(type); }
-                catch (Exception ex) { Logger.Error("Type-backup delete failed: " + ex.Message); }
-                finally { try { progress.BeginInvoke(new Action(progress.Close)); } catch { } }
-            });
-            progress.ShowDialog(this);
+            ProgressWindow.Run(this, "Deleting backups\u2026",
+                $"Sending {BackupEngine.TypeLabel(type)} backups to the Recycle Bin\u2026",
+                progress => engine.DeleteTypeBackups(type));
         }
 
         private void SaveChanges()
@@ -525,6 +470,7 @@ namespace SteamScreenshotBackup
             _settings.AutoRestore = _autoRestore.Checked;
             _settings.ShowNotifications = _showNotifications.Checked;
             bool markdownNewlyEnabled = _markdownIndex.Checked && !_settings.GenerateMarkdownIndex;
+            bool markdownTurnedOff = _settings.GenerateMarkdownIndex && !_markdownIndex.Checked;
             _settings.GenerateMarkdownIndex = _markdownIndex.Checked;
             _settings.PreviewBeforeImport = _previewImport.Checked;
             bool deleteOriginalsNewlyEnabled = _deleteOriginals.Checked && !_settings.DeleteOriginals;
@@ -595,6 +541,15 @@ namespace SteamScreenshotBackup
                 RunMarkdownRebuild();
             }
 
+            // Turned the markdown index off: offer to remove the files it left behind.
+            if (markdownTurnedOff && _app.Engine.MarkdownIndexExists() && MessageDialog.AskYesNo(
+                    "You turned off the Markdown index. Delete the existing _Screenshot_Log.md files?\n\n" +
+                    "They will be sent to the Windows Recycle Bin (recoverable). Choose No to leave them in place.",
+                    "Delete Markdown index files?"))
+            {
+                RunMarkdownDelete();
+            }
+
             // Newly enabled: offer to clean up originals that were already imported.
             if (deleteOriginalsNewlyEnabled && MessageDialog.AskYesNo(
                     "Also delete originals that were already imported?\n\n" +
@@ -624,50 +579,9 @@ namespace SteamScreenshotBackup
 
         private void RunMigration(string oldDest, string newDest)
         {
-            var progress = new Form
-            {
-                Text = "Migrating backup\u2026",
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                ControlBox = false,
-                StartPosition = FormStartPosition.CenterParent,
-                ClientSize = new Size(380, 96)
-            };
-            Theme.ApplyWindow(progress);
-            var label = new Label
-            {
-                Text = "Moving files\u2026",
-                AutoSize = false,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Theme.Text
-            };
-            progress.Controls.Add(label);
-
             var engine = _app.Engine;
-            progress.Shown += (s, e) => Task.Run(() =>
-            {
-                try
-                {
-                    engine.MoveBackup(oldDest, newDest, (done, total) =>
-                    {
-                        try
-                        {
-                            progress.BeginInvoke(new Action(() =>
-                                label.Text = $"Moving files\u2026 {done} / {total}"));
-                        }
-                        catch { }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error("Backup migration failed: " + ex.Message);
-                }
-                finally
-                {
-                    try { progress.BeginInvoke(new Action(progress.Close)); } catch { }
-                }
-            });
-            progress.ShowDialog(this);
+            ProgressWindow.Run(this, "Migrating backup\u2026", "Moving files\u2026",
+                progress => engine.MoveBackup(oldDest, newDest, progress));
         }
     }
 }
