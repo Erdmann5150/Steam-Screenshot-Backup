@@ -40,7 +40,11 @@ Steam Screenshots/
 
 ![The installer's task selection page](docs/img/installer.png)
 
-*The installer lets you choose startup, shortcuts, popup notifications, and (dangerous) delete-originals-after-import; the main window opens automatically when setup finishes.*
+*The installer (dark to match the app) lets you choose startup, shortcuts, popup notifications, preview-before-import, and (dangerous) delete-originals-after-import; the main window opens automatically when setup finishes.*
+
+![The preview window listing original and proposed backup paths](docs/img/preview.png)
+
+*Optional preview before a batch import or reorganization — see exactly what will happen, then Import or Cancel.*
 
 ## Key features
 
@@ -66,6 +70,12 @@ Steam Screenshots/
 - **Custom folder layouts** — choose between `Game`, `Game\Year`, `Year\Game` and
   more; existing backups can be reorganized in place. Handy for markdown journals
   and personal knowledge bases.
+- **Markdown index** — optionally maintain a `_Screenshot_Log.md` in each folder
+  that embeds every screenshot under per-day headers, ready to drop into Obsidian
+  or any markdown vault. Can be generated retroactively for existing folders.
+- **Preview before importing** — optionally review a dry-run list of *Original →
+  Proposed backup path* before batch imports and layout reorganizations. Real-time
+  captures during play are never interrupted.
 - **Optional Steam cleanup** — turn on the (clearly-marked, dangerous) *Delete
   originals after import* setting and each original is removed from Steam once it's
   safely backed up. Deleted files go to the **Windows Recycle Bin**, so they stay
@@ -86,8 +96,9 @@ Steam Screenshots/
    [latest release](../../releases/latest).
 2. Run it. Pick an install folder (defaults to Program Files) and choose whether
    to start with Windows, add Start Menu / Desktop shortcuts, turn off popup
-   notifications, and (optionally, and flagged as dangerous) delete originals after
-   import. The main window opens automatically when setup finishes.
+   notifications, preview batches before importing, and (optionally, and flagged as
+   dangerous) delete originals after import. The main window opens automatically
+   when setup finishes.
 3. On first launch, choose your backup folder and which screenshot types to back
    up. That's the entire setup.
 
@@ -120,10 +131,12 @@ Uninstall option cleans up after itself.
 - **Settings** covers the backup folder (with optional migration of existing
   files), screenshot types (turning one off offers to Recycle-Bin its existing
   backups), a manual high-resolution folder for when it can't be auto-detected,
-  folder layout (with optional in-place reorganization), theme, popup
-  notifications, autostart, whether deleted backup files are restored
-  automatically, and a dangerous *Delete originals after import* option (with a
-  double confirmation and an offer to apply it to already-imported screenshots).
+  folder layout (with optional in-place reorganization), a Markdown index and a
+  preview-before-import toggle, theme, popup notifications, autostart, whether
+  deleted backup files are restored automatically, and a dangerous *Delete
+  originals after import* option (with a double confirmation and an offer to apply
+  it to already-imported screenshots). Enabling the Markdown index also offers to
+  generate it for your existing folders.
 - **Game names** lets you fix delisted or non-Steam games without touching any
   JSON by hand.
 
@@ -182,7 +195,9 @@ The app is designed to be invisible in day-to-day use:
 - **Copies are streamed by the OS** and preserve original timestamps; metadata is
   inserted losslessly (a few hundred bytes) without re-encoding image data.
 - **Name lookups are cached forever** in `appnames.json`; each game is resolved
-  once, ever, across both tools. Failed lookups are not retried within a session.
+  once, ever, across both tools. Failed lookups are not retried within a session,
+  and uncached store-API calls are throttled (≥500 ms apart, on a background
+  thread) so bulk imports never rate-limit or block the UI.
 - **Logs are rotated** at ~1 MB with three retained archives, so disk usage stays
   capped no matter how long the app runs.
 - **Offline destinations don't spin.** When a network destination drops, the app

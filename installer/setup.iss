@@ -1,10 +1,10 @@
 ; Inno Setup script for Steam Screenshot Backup.
 ; Build with build.ps1 at the repository root (it publishes the exe first and
 ; passes the version in), or manually:
-;   ISCC.exe setup.iss /DAppVersion=3.3.0 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
+;   ISCC.exe setup.iss /DAppVersion=3.4.0 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
 
 #ifndef AppVersion
-  #define AppVersion "3.3.0"
+  #define AppVersion "3.4.0"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\app\bin\Release\net8.0-windows\win-x64\publish"
@@ -47,6 +47,7 @@ Name: "startupwindows"; Description: "Start {#AppName} automatically when I sign
 Name: "startmenuicon"; Description: "Create a Start Menu entry"
 Name: "desktopicon"; Description: "Create a Desktop shortcut"; Flags: unchecked
 Name: "nonotifications"; Description: "Turn off popup notifications"; Flags: unchecked
+Name: "previewimport"; Description: "Preview a list of changes before importing batches of screenshots"; Flags: unchecked
 Name: "deleteoriginals"; Description: "Delete original Steam screenshots after import (dangerous, sends them to the Recycle Bin)"; Flags: unchecked
 
 [Files]
@@ -63,6 +64,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 ; The app reads these markers on first run to pre-apply the matching settings.
 Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "DeleteOriginalsDefault"; ValueData: 1; Tasks: deleteoriginals; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "NotificationsOffDefault"; ValueData: 1; Tasks: nonotifications; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "PreviewImportsDefault"; ValueData: 1; Tasks: previewimport; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [Run]
 ; --show opens the main window after install instead of only landing in the tray.
@@ -79,6 +81,61 @@ Filename: "reg.exe"; Parameters: "delete ""HKCU\Software\Microsoft\Windows\Curre
 Type: filesandordirs; Name: "{localappdata}\SteamScreenshotBackup"
 
 [Code]
+// ----- best-effort dark theme for the wizard (matches the app) -----
+function DwmSetWindowAttribute(hwnd: HWND; attr: Integer; var value: Integer; size: Integer): Integer;
+  external 'DwmSetWindowAttribute@dwmapi.dll stdcall';
+
+const
+  clDarkBg    = $00251D16;   // TColor (BGR) of RGB(22,29,37)
+  clDarkPanel = $00342920;   // RGB(32,41,52)
+  clLightText = $00EBE2D6;   // RGB(214,226,235)
+
+procedure ApplyDarkTo(C: TControl);
+var
+  i: Integer;
+begin
+  if C is TNewCheckListBox then begin
+    TNewCheckListBox(C).Color := clDarkBg;
+    TNewCheckListBox(C).Font.Color := clLightText;
+  end
+  else if C is TNewStaticText then TNewStaticText(C).Font.Color := clLightText
+  else if C is TNewCheckBox then TNewCheckBox(C).Font.Color := clLightText
+  else if C is TNewRadioButton then TNewRadioButton(C).Font.Color := clLightText
+  else if C is TNewEdit then begin
+    TNewEdit(C).Color := clDarkPanel; TNewEdit(C).Font.Color := clLightText;
+  end
+  else if C is TNewMemo then begin
+    TNewMemo(C).Color := clDarkPanel; TNewMemo(C).Font.Color := clLightText;
+  end
+  else if C is TNewNotebookPage then TNewNotebookPage(C).Color := clDarkBg
+  else if C is TPanel then TPanel(C).Color := clDarkBg;
+
+  if C is TWinControl then
+    for i := 0 to TWinControl(C).ControlCount - 1 do
+      ApplyDarkTo(TWinControl(C).Controls[i]);
+end;
+
+procedure ApplyDarkMode;
+var
+  v: Integer;
+begin
+  WizardForm.Color := clDarkBg;
+  WizardForm.MainPanel.Color := clDarkBg;
+  ApplyDarkTo(WizardForm);
+  v := 1;
+  DwmSetWindowAttribute(WizardForm.Handle, 20, v, SizeOf(v));   // dark title bar
+end;
+
+procedure InitializeWizard;
+begin
+  ApplyDarkMode;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  ApplyDarkMode;   // re-theme controls created per page
+end;
+
 // Stop a running instance before installing over it.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var

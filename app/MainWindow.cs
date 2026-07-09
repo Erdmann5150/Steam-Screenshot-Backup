@@ -439,13 +439,21 @@ namespace SteamScreenshotBackup
         {
             if (_list.SelectedItems.Count == 0) return;
             var entry = (LogEntry)_list.SelectedItems[0].Tag;
-            if (entry.FilePath == null) return;
+
+            // Newer entries carry the path; entries loaded from older log files don't,
+            // so fall back to reconstructing it from the message text.
+            string path = entry.FilePath;
+            if (string.IsNullOrEmpty(path) &&
+                entry.Level is LogLevel.Backup or LogLevel.Restore or LogLevel.Deletion)
+                path = _app.Engine.BackupPathFromLogMessage(entry.Message);
+            if (string.IsNullOrEmpty(path)) return;
+
             try
             {
-                if (File.Exists(entry.FilePath))
-                    Process.Start("explorer.exe", $"/select,\"{entry.FilePath}\"");
+                if (File.Exists(path))
+                    Process.Start("explorer.exe", $"/select,\"{path}\"");
                 else
-                    MessageDialog.Info("That file no longer exists:\n" + entry.FilePath);
+                    MessageDialog.Info("That file no longer exists:\n" + path);
             }
             catch (Exception ex)
             {

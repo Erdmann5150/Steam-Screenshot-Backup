@@ -54,6 +54,12 @@ namespace SteamScreenshotBackup
         // Our own backup naming:   2026-07-06 21.05.32 (2).jpg
         private static readonly Regex BackupName =
             new Regex(@"^\d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}( \(\d+\))?\.\w+$", RegexOptions.Compiled);
+        // The timestamp prefix of a backup name.
+        private static readonly Regex BackupTs =
+            new Regex(@"^(\d{4})-(\d{2})-(\d{2}) (\d{2})\.(\d{2})\.(\d{2})", RegexOptions.Compiled);
+        // A "game  \u203A  name  [type]" activity-log message.
+        private static readonly Regex FileMsgRx =
+            new Regex(@"^(.+?)\s+\u203A\s+(.+?)\s+\[(Standard|High resolution)\]$", RegexOptions.Compiled);
 
         private readonly Settings _settings;
         private readonly string _steamPath;
@@ -61,6 +67,7 @@ namespace SteamScreenshotBackup
         private List<string> _highResFolders;
         private List<string> _autoHighResFolders = new List<string>();
         private readonly AppNameResolver _resolver;
+        private readonly MarkdownIndex _markdown = new MarkdownIndex();
         private readonly BlockingCollection<(ScreenshotType Type, string Path)> _queue
             = new BlockingCollection<(ScreenshotType, string)>();
 
@@ -296,6 +303,11 @@ namespace SteamScreenshotBackup
                 run.GamesAffected.Add(game);
             }
 
+            // Markdown index: only for genuinely new backups, not restores (which would
+            // otherwise duplicate an entry the log already has).
+            if (!restore && _settings.GenerateMarkdownIndex)
+                _markdown.Append(dest, ts);
+
             // Dangerous, opt-in: remove the just-imported original (to the Recycle Bin).
             DeleteOriginalToRecycleBin(src, dest, run);
             return true;
@@ -447,6 +459,72 @@ namespace SteamScreenshotBackup
                 Logger.Log($"Retroactively deleted {deleted} imported original" +
                            $"{(deleted == 1 ? "" : "s")} (sent to the Recycle Bin).");
             return deleted;
+        }
+
+        // ------------------------------------------------------- markdown / paths
+
+        // Rebuilds "_Screenshot_Log.md" for every backup folder from the images it
+        // contains (used when the user turns the feature on and wants existing folders
+        // indexed). Returns the number of folders written.
+        public int RebuildMarkdownIndex(Action<int, int> progress = null)
+        {
+            var byDir = new Dictionary<string, List<(string Name, DateTime Captured)>>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
+                {
+                    string root = Path.Combine(Destination, typeFolder);
+                    if (!Directory.Exists(root)) continue;
+                    foreach (var f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                    {
+                        string name = Path.GetFileName(f);
+                        if (!BackupName.IsMatch(name)) continue;
+                        DateTime ts = ParseBackupTimestamp(name) ?? File.GetLastWriteTime(f);
+                        string dir = Path.GetDirectoryName(f);
+                        if (!byDir.TryGetValue(dir, out var list)) { list = new(); byDir[dir] = list; }
+                        list.Add((name, ts));
+                    }
+                }
+                int done = 0;
+                foreach (var kv in byDir)
+                {
+                    kv.Value.Sort((a, b) => a.Captured.CompareTo(b.Captured));
+                    _markdown.Rebuild(kv.Key, kv.Value);
+                    progress?.Invoke(++done, byDir.Count);
+                }
+            }
+            catch (Exception ex) { Logger.Warn("Markdown rebuild error: " + ex.Message); }
+            if (byDir.Count > 0)
+                Logger.Log($"Generated the Markdown index in {byDir.Count} folder{(byDir.Count == 1 ? "" : "s")}.");
+            return byDir.Count;
+        }
+
+        // Reconstructs the on-disk path of a backup/restore/deletion log entry from its
+        // message text, so activity-log rows loaded from older log files (which didn't
+        // store the path) can still be revealed in Explorer. Null if not a file entry.
+        public string BackupPathFromLogMessage(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return null;
+            var m = FileMsgRx.Match(message);
+            if (!m.Success) return null;
+            string game = m.Groups[1].Value.Trim();
+            string destName = m.Groups[2].Value.Trim();
+            var type = m.Groups[3].Value == "Standard" ? ScreenshotType.Standard : ScreenshotType.HighRes;
+            DateTime ts = ParseBackupTimestamp(destName) ?? DateTime.MinValue;
+            return Path.Combine(Destination, TypeFolder(type), ExpandTemplate(game, ts), destName);
+        }
+
+        private static DateTime? ParseBackupTimestamp(string name)
+        {
+            var m = BackupTs.Match(name);
+            if (!m.Success) return null;
+            try
+            {
+                return new DateTime(
+                    int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value),
+                    int.Parse(m.Groups[4].Value), int.Parse(m.Groups[5].Value), int.Parse(m.Groups[6].Value));
+            }
+            catch { return null; }
         }
 
         // -------------------------------------------------- re-sync missing files
@@ -832,6 +910,67 @@ namespace SteamScreenshotBackup
             }
         }
 
+        // -------------------------------------------------------- preview / dry-run
+
+        // What a catch-up scan would import right now: source files with no matching
+        // (complete) backup yet. Resolving names may hit the store API, so callers run
+        // this off the UI thread. Cheap for cached/installed games.
+        public List<(string From, string To)> PlanScan()
+        {
+            var plan = new List<(string, string)>();
+            if (!CheckDestinationAvailable()) return plan;
+            foreach (var (path, appid, type) in EnumerateSources())
+            {
+                try
+                {
+                    string game = _resolver.ResolveFolderName(appid);
+                    var (ts, destName) = ConvertName(Path.GetFileName(path), type);
+                    if (destName == null) continue;
+                    string dest = Path.Combine(Destination, TypeFolder(type), ExpandTemplate(game, ts), destName);
+                    if (File.Exists(dest) && new FileInfo(dest).Length >= new FileInfo(path).Length) continue;
+                    plan.Add((path, dest));
+                }
+                catch { }
+            }
+            return plan;
+        }
+
+        // The moves a template change from oldTemplate to newTemplate would make.
+        public List<(string From, string To)> PlanReorganize(string oldTemplate, string newTemplate)
+        {
+            var plan = new List<(string, string)>();
+            foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
+            {
+                string root = Path.Combine(Destination, typeFolder);
+                if (!Directory.Exists(root)) continue;
+
+                foreach (var src in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+                {
+                    string file = Path.GetFileName(src);
+                    if (!BackupName.IsMatch(file)) continue;
+
+                    string game = ExtractGameSegment(Path.GetRelativePath(root, src), oldTemplate);
+                    if (game == null) continue;
+                    var tsMatch = Regex.Match(file, @"^(\d{4})-(\d{2})-(\d{2}) (\d{2})\.(\d{2})\.(\d{2})");
+                    if (!tsMatch.Success) continue;
+                    var ts = new DateTime(
+                        int.Parse(tsMatch.Groups[1].Value), int.Parse(tsMatch.Groups[2].Value),
+                        int.Parse(tsMatch.Groups[3].Value), int.Parse(tsMatch.Groups[4].Value),
+                        int.Parse(tsMatch.Groups[5].Value), int.Parse(tsMatch.Groups[6].Value));
+
+                    string newRel = newTemplate
+                        .Replace("{game}", game)
+                        .Replace("{yyyy}", ts.ToString("yyyy"))
+                        .Replace("{MM}", ts.ToString("MM"))
+                        .Replace("{dd}", ts.ToString("dd"));
+                    string dest = Path.Combine(root, newRel, file);
+                    if (!string.Equals(dest, src, StringComparison.OrdinalIgnoreCase))
+                        plan.Add((src, dest));
+                }
+            }
+            return plan;
+        }
+
         // Re-shapes the existing backup when the folder template changes,
         // e.g. {game} -> {yyyy}\{game}. Unrecognized files are left alone.
         public void ReorganizeLayout(string oldTemplate, string newTemplate)
@@ -840,37 +979,15 @@ namespace SteamScreenshotBackup
             try
             {
                 int moved = 0;
+                foreach (var (src, dest) in PlanReorganize(oldTemplate, newTemplate))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                    if (!File.Exists(dest)) { File.Move(src, dest); moved++; }
+                }
                 foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
                 {
                     string root = Path.Combine(Destination, typeFolder);
-                    if (!Directory.Exists(root)) continue;
-
-                    foreach (var src in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
-                    {
-                        string file = Path.GetFileName(src);
-                        if (!BackupName.IsMatch(file)) continue;
-
-                        string game = ExtractGameSegment(Path.GetRelativePath(root, src), oldTemplate);
-                        if (game == null) continue;
-                        var tsMatch = Regex.Match(file, @"^(\d{4})-(\d{2})-(\d{2}) (\d{2})\.(\d{2})\.(\d{2})");
-                        if (!tsMatch.Success) continue;
-                        var ts = new DateTime(
-                            int.Parse(tsMatch.Groups[1].Value), int.Parse(tsMatch.Groups[2].Value),
-                            int.Parse(tsMatch.Groups[3].Value), int.Parse(tsMatch.Groups[4].Value),
-                            int.Parse(tsMatch.Groups[5].Value), int.Parse(tsMatch.Groups[6].Value));
-
-                        string newRel = newTemplate
-                            .Replace("{game}", game)
-                            .Replace("{yyyy}", ts.ToString("yyyy"))
-                            .Replace("{MM}", ts.ToString("MM"))
-                            .Replace("{dd}", ts.ToString("dd"));
-                        string dest = Path.Combine(root, newRel, file);
-                        if (string.Equals(dest, src, StringComparison.OrdinalIgnoreCase)) continue;
-
-                        Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                        if (!File.Exists(dest)) { File.Move(src, dest); moved++; }
-                    }
-                    DeleteEmptyTree(root, keepRoot: true);
+                    if (Directory.Exists(root)) DeleteEmptyTree(root, keepRoot: true);
                 }
                 if (moved > 0) Logger.Log($"Reorganized {moved} backup files into the new folder layout.");
             }
