@@ -12,3 +12,6 @@ desktop.ini
 # Local snapshots
 *.7z
 *.zip
+
+# Private Claude Code workflow notes (kept local, not published)
+CLAUDE.md

@@ -131,6 +131,28 @@ namespace SteamScreenshotBackup
             SaveCache();
         }
 
+        // True if this appid is already in the persistent game-name list (appnames.json).
+        public bool IsTracked(string appid)
+        {
+            lock (_lock) return _cache.ContainsKey(appid);
+        }
+
+        // Forces a fresh resolution attempt, bypassing this session's failed-lookup
+        // cache (sources like manifests or shortcuts.vdf may have changed since the
+        // last attempt). A successful result is recorded in the persistent game-name
+        // list even when it came from a free source (manifest), so it is visible and
+        // editable from the "Game Names" window. Used by the retroactive app-id scan.
+        public string TryResolveNow(string appid)
+        {
+            lock (_lock) _failedLookups.Remove(appid);
+            string name = Resolve(appid);
+            if (name != null) SetCachedName(appid, name);
+            return name;
+        }
+
+        // Path to the persistent game-name cache file, for "open in editor" actions.
+        public string CacheFilePath => _cacheFile;
+
         // ----- sources -----
 
         private void ScanManifests()

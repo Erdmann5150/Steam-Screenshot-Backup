@@ -62,26 +62,28 @@ namespace SteamScreenshotBackup
 
             Text = "Steam Screenshot Backup";
             StartPosition = FormStartPosition.CenterScreen;
-            Size = new Size(900, 600);
-            MinimumSize = new Size(860, 420);
+            Size = new Size(970, 600);
+            MinimumSize = new Size(930, 420);
             AutoScaleMode = AutoScaleMode.Dpi;
 
             // ----- action bar -----
             _top = new Panel { Dock = DockStyle.Top, Height = 56 };
-            var backupNow = MakeButton("Back up now", 130, primary: true);
+            var backupNow = MakeButton("Backup Now", 120, primary: true);
             backupNow.Click += (s, e) => _app.BackUpNow();
-            var openFolder = MakeButton("Open backup folder", 160);
+            var openFolder = MakeButton("Open Backup Folder", 155);
             openFolder.Click += (s, e) => _app.OpenBackupFolder();
-            var resync = MakeButton("Re-sync\u2026", 100);
+            var resync = MakeButton("Re-Sync", 90);
             resync.Click += (s, e) => ResyncWindow.ShowWindow(_app.Engine);
-            _pauseBtn = MakeButton("Pause watching", 140);
+            _pauseBtn = MakeButton("Pause Monitoring", 155);
             _pauseBtn.Click += (s, e) => _app.SetPaused(!_app.IsPaused);
-            var settings = MakeButton("Settings\u2026", 110);
+            var settings = MakeButton("Settings", 90);
             settings.Click += (s, e) => _app.ShowSettings(this);
-            var names = MakeButton("Game names\u2026", 130);
+            var names = MakeButton("Game Names", 110);
             names.Click += (s, e) => new GameNamesWindow(_app.Engine.Resolver).ShowDialog(this);
+            var utilities = MakeButton("\u2699 Utilities", 120);
+            utilities.Click += (s, e) => ShowUtilitiesMenu(utilities);
 
-            _buttons = new[] { backupNow, openFolder, resync, _pauseBtn, settings, names };
+            _buttons = new[] { backupNow, openFolder, resync, _pauseBtn, settings, names, utilities };
             int x = 14;
             foreach (var b in _buttons)
             {
@@ -95,6 +97,7 @@ namespace SteamScreenshotBackup
             (_statGames, _statGamesCap) = MakeStat(_stats, 14, "GAMES BACKED UP");
             (_statFiles, _statFilesCap) = MakeStat(_stats, 234, "SCREENSHOTS BACKED UP");
             (_statSession, _statSessionCap) = MakeStat(_stats, 454, "THIS SESSION");
+            _stats.Resize += (s, e) => LayoutStats();
 
             // ----- filter row -----
             var filterRow = new Panel { Dock = DockStyle.Top, Height = 46 };
@@ -174,6 +177,7 @@ namespace SteamScreenshotBackup
             _list.DrawSubItem += DrawSubItem;
             _list.Resize += (s, e) => FitDetailsColumn();
             _list.MouseDoubleClick += (s, e) => RevealSelectedFile();
+            Theme.ApplyScrollbars(_list);
 
             _empty = new Label
             {
@@ -225,6 +229,7 @@ namespace SteamScreenshotBackup
             Reload();
             RefreshSessionStat();
             RefreshTotals();
+            LayoutStats();
         }
 
         // ------------------------------------------------------------- theming
@@ -234,6 +239,59 @@ namespace SteamScreenshotBackup
             var b = new Button { Text = text, Size = new Size(width, 32), Tag = primary };
             Theme.StyleButton(b, primary);
             return b;
+        }
+
+        // -------------------------------------------------------- utilities menu
+
+        private void ShowUtilitiesMenu(Control anchor)
+        {
+            var menu = new ContextMenuStrip { Renderer = Theme.MenuRenderer };
+            menu.Items.Add("Delete standard backups", null, (s, e) => DeleteTypeBackups(ScreenshotType.Standard));
+            menu.Items.Add("Delete high-resolution backups", null, (s, e) => DeleteTypeBackups(ScreenshotType.HighRes));
+            menu.Items.Add("Delete Markdown indexes", null, (s, e) => DeleteMarkdownIndexes());
+            menu.Items.Add("Delete original Steam screenshot files", null, (s, e) => DeleteImportedOriginals());
+            menu.Items.Add("Clear application logs", null, (s, e) => ClearApplicationLogs());
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Delete specific files/folders\u2026", null,
+                (s, e) => TargetedDeleteWindow.ShowWindow(_app.Engine, this));
+            menu.Show(anchor, new Point(0, anchor.Height));
+        }
+
+        private void DeleteTypeBackups(ScreenshotType type)
+        {
+            var engine = _app.Engine;
+            string label = BackupEngine.TypeLabel(type);
+            var (count, bytes) = engine.PreviewTypeBackups(type);
+            if (!MessageDialog.ConfirmDeletion($"Delete all {label} backups?", count, bytes)) return;
+            ProgressWindow.Run(this, "Deleting backups\u2026", $"Sending {label} backups to the Recycle Bin\u2026",
+                progress => engine.DeleteTypeBackups(type));
+        }
+
+        private void DeleteMarkdownIndexes()
+        {
+            var engine = _app.Engine;
+            var (count, bytes) = engine.PreviewMarkdownIndexes();
+            if (!MessageDialog.ConfirmDeletion("Delete all Markdown index files?", count, bytes)) return;
+            ProgressWindow.Run(this, "Deleting index\u2026", "Sending _Screenshot_Log.md files to the Recycle Bin\u2026",
+                progress => engine.DeleteMarkdownIndexes(progress));
+        }
+
+        private void DeleteImportedOriginals()
+        {
+            var engine = _app.Engine;
+            var (count, bytes) = engine.PreviewPurgeImportedOriginals();
+            if (!MessageDialog.ConfirmDeletion(
+                    "Delete original Steam screenshots that are already backed up?", count, bytes)) return;
+            ProgressWindow.Run(this, "Deleting originals\u2026", "Sending imported originals to the Recycle Bin\u2026",
+                progress => engine.PurgeImportedOriginals(progress));
+        }
+
+        private void ClearApplicationLogs()
+        {
+            var (count, bytes) = Logger.PreviewLogFiles();
+            if (!MessageDialog.ConfirmDeletion("Clear the application log file and its archives?", count, bytes)) return;
+            Logger.ClearLogs();
+            Reload();
         }
 
         private (Label Value, Label Caption) MakeStat(Panel host, int x, string caption)
@@ -255,6 +313,22 @@ namespace SteamScreenshotBackup
             host.Controls.Add(cap);
             host.Controls.Add(val);
             return (val, cap);
+        }
+
+        // Spread the three stat columns evenly across the strip so they track the
+        // window width instead of bunching at fixed left offsets.
+        private void LayoutStats()
+        {
+            if (_stats == null || _stats.Width <= 0) return;
+            var caps = new[] { _statGamesCap, _statFilesCap, _statSessionCap };
+            var vals = new[] { _statGames, _statFiles, _statSession };
+            int colW = _stats.Width / caps.Length;
+            for (int i = 0; i < caps.Length; i++)
+            {
+                int left = i * colW + 14;
+                caps[i].Left = left;
+                vals[i].Left = left - 2;
+            }
         }
 
         private void ApplyTheme()
@@ -332,7 +406,7 @@ namespace SteamScreenshotBackup
 
         private void OnPauseChanged()
         {
-            _pauseBtn.Text = _app.IsPaused ? "Resume watching" : "Pause watching";
+            _pauseBtn.Text = _app.IsPaused ? "Resume Monitoring" : "Pause Monitoring";
         }
 
         // ------------------------------------------------------------- log list

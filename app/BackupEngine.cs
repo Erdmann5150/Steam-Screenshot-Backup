@@ -333,7 +333,7 @@ namespace SteamScreenshotBackup
             }
         }
 
-        private static string TypeFolder(ScreenshotType t) =>
+        public static string TypeFolder(ScreenshotType t) =>
             t == ScreenshotType.Standard ? StandardFolder : HighResFolder;
 
         public static string TypeLabel(ScreenshotType t) =>
@@ -423,7 +423,47 @@ namespace SteamScreenshotBackup
             if (run.OriginalsDeleted > 0)
                 Logger.Log($"Deleted {run.OriginalsDeleted} imported original" +
                            $"{(run.OriginalsDeleted == 1 ? "" : "s")} (sent to the Recycle Bin).");
+            ScanForUntrackedAppIdFolders();
             return run;
+        }
+
+        // Looks for existing backup folders that fell back to an unresolved-appid name
+        // ("AppID_<id>" or "Non-Steam App <id>", written by ResolveFolderName when no
+        // name source had the game) and retries resolution now, in case a manifest,
+        // shortcut, or the store can identify it today. A successful match is recorded
+        // in the persistent game-name list even though the on-disk folder keeps its
+        // existing name (renaming/moving files isn't attempted here).
+        private void ScanForUntrackedAppIdFolders()
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
+                {
+                    string root = Path.Combine(Destination, typeFolder);
+                    if (!Directory.Exists(root)) continue;
+                    // Depth varies with the folder-layout template, so check every level.
+                    foreach (var dir in Directory.GetDirectories(root, "*", SearchOption.AllDirectories))
+                    {
+                        string appid = ExtractFallbackAppId(Path.GetFileName(dir));
+                        if (appid == null || !seen.Add(appid) || _resolver.IsTracked(appid)) continue;
+
+                        string resolved = _resolver.TryResolveNow(appid);
+                        if (resolved != null)
+                            Logger.Log($"Detected existing backup game folder: {resolved} ({appid})");
+                    }
+                }
+            }
+            catch (Exception ex) { Logger.Warn("App ID tracking scan failed: " + ex.Message); }
+        }
+
+        private static readonly Regex FallbackAppIdRx =
+            new Regex(@"^(?:AppID_|Non-Steam App )(\d+)$", RegexOptions.Compiled);
+
+        private static string ExtractFallbackAppId(string folderName)
+        {
+            var m = FallbackAppIdRx.Match(folderName);
+            return m.Success ? m.Groups[1].Value : null;
         }
 
         // Retroactive one-shot for "delete originals after import": sends every original
@@ -497,6 +537,53 @@ namespace SteamScreenshotBackup
             if (byDir.Count > 0)
                 Logger.Log($"Generated the Markdown index in {byDir.Count} folder{(byDir.Count == 1 ? "" : "s")}.");
             return byDir.Count;
+        }
+
+        // True if at least one "_Screenshot_Log.md" exists anywhere under the backup.
+        public bool MarkdownIndexExists()
+        {
+            try
+            {
+                foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
+                {
+                    string root = Path.Combine(Destination, typeFolder);
+                    if (Directory.Exists(root) &&
+                        Directory.EnumerateFiles(root, MarkdownIndex.FileName, SearchOption.AllDirectories).Any())
+                        return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        // Sends every "_Screenshot_Log.md" under the backup to the Recycle Bin (used when
+        // the user turns the Markdown-index feature off and chooses to clean up). Reports
+        // (done, total) and returns the number deleted.
+        public int DeleteMarkdownIndexes(Action<int, int> progress = null)
+        {
+            var files = new List<string>();
+            try
+            {
+                foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
+                {
+                    string root = Path.Combine(Destination, typeFolder);
+                    if (!Directory.Exists(root)) continue;
+                    files.AddRange(Directory.EnumerateFiles(root, MarkdownIndex.FileName, SearchOption.AllDirectories));
+                }
+            }
+            catch (Exception ex) { Logger.Warn("Markdown index scan failed: " + ex.Message); }
+
+            int deleted = 0, done = 0;
+            foreach (var f in files)
+            {
+                try { RecycleBin.Delete(f); deleted++; }
+                catch (Exception ex) { Logger.Warn($"Could not delete {Path.GetFileName(f)}: {ex.Message}"); }
+                progress?.Invoke(++done, files.Count);
+            }
+            if (deleted > 0)
+                Logger.Log($"Deleted {deleted} Markdown index file{(deleted == 1 ? "" : "s")} " +
+                           "(sent to the Recycle Bin).");
+            return deleted;
         }
 
         // Reconstructs the on-disk path of a backup/restore/deletion log entry from its
@@ -685,6 +772,127 @@ namespace SteamScreenshotBackup
                 _unsuppressTimer.Change(3000, Timeout.Infinite);
             }
             return files;
+        }
+
+        // Count and total size of a screenshot-type backup tree, for the "are you sure"
+        // prompt shown before DeleteTypeBackups actually deletes anything.
+        public (int Count, long Bytes) PreviewTypeBackups(ScreenshotType type) =>
+            CountAndSize(Path.Combine(Destination, TypeFolder(type)), "*");
+
+        // Count and total size of every "_Screenshot_Log.md" under the backup, for the
+        // "are you sure" prompt shown before DeleteMarkdownIndexes actually deletes them.
+        public (int Count, long Bytes) PreviewMarkdownIndexes()
+        {
+            int count = 0; long bytes = 0;
+            foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
+            {
+                var (c, b) = CountAndSize(Path.Combine(Destination, typeFolder), MarkdownIndex.FileName);
+                count += c; bytes += b;
+            }
+            return (count, bytes);
+        }
+
+        // Count and total size of original Steam screenshots that already have a
+        // verified backup copy, for the "are you sure" prompt shown before
+        // PurgeImportedOriginals actually deletes them.
+        public (int Count, long Bytes) PreviewPurgeImportedOriginals()
+        {
+            int count = 0; long bytes = 0;
+            foreach (var (path, appid, type) in EnumerateSources())
+            {
+                try
+                {
+                    string game = _resolver.ResolveFolderName(appid);
+                    var (ts, destName) = ConvertName(Path.GetFileName(path), type);
+                    if (destName == null) continue;
+                    string dest = Path.Combine(Destination, TypeFolder(type), ExpandTemplate(game, ts), destName);
+                    if (!File.Exists(path) || !File.Exists(dest)) continue;
+                    var srcInfo = new FileInfo(path);
+                    if (new FileInfo(dest).Length < srcInfo.Length) continue;
+                    count++;
+                    bytes += srcInfo.Length;
+                }
+                catch { }
+            }
+            return (count, bytes);
+        }
+
+        private static (int Count, long Bytes) CountAndSize(string root, string searchPattern)
+        {
+            int count = 0; long bytes = 0;
+            if (Directory.Exists(root))
+            {
+                foreach (var f in Directory.EnumerateFiles(root, searchPattern, SearchOption.AllDirectories))
+                {
+                    count++;
+                    try { bytes += new FileInfo(f).Length; } catch { }
+                }
+            }
+            return (count, bytes);
+        }
+
+        // One entry in the targeted-deletion tree: a single backup file under some
+        // game folder.
+        public class BackupFileEntry
+        {
+            public string Path;
+            public string Name;
+            public long Size;
+        }
+
+        // The whole backup, grouped by type then game, for the targeted-deletion
+        // window. Only files matching our own backup naming are included (skips
+        // "_Screenshot_Log.md" and anything else that doesn't belong to us).
+        public Dictionary<ScreenshotType, Dictionary<string, List<BackupFileEntry>>> GetBackupTree()
+        {
+            var result = new Dictionary<ScreenshotType, Dictionary<string, List<BackupFileEntry>>>();
+            foreach (var type in new[] { ScreenshotType.Standard, ScreenshotType.HighRes })
+            {
+                string root = Path.Combine(Destination, TypeFolder(type));
+                var byGame = new Dictionary<string, List<BackupFileEntry>>(StringComparer.OrdinalIgnoreCase);
+                if (Directory.Exists(root))
+                {
+                    foreach (var f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                    {
+                        string name = Path.GetFileName(f);
+                        if (!BackupName.IsMatch(name)) continue;
+                        string game = ExtractGameFromRelPath(Path.GetRelativePath(root, f)) ?? "(unknown)";
+                        if (!byGame.TryGetValue(game, out var list)) { list = new(); byGame[game] = list; }
+                        long size = 0;
+                        try { size = new FileInfo(f).Length; } catch { }
+                        list.Add(new BackupFileEntry { Path = f, Name = name, Size = size });
+                    }
+                }
+                result[type] = byGame;
+            }
+            return result;
+        }
+
+        // Sends a specific set of backup files to the Recycle Bin (used by the targeted
+        // deletion window). Dest-watcher events are suppressed the same way the bulk
+        // delete methods do, since this can move hundreds of files at once.
+        public int DeleteFiles(IReadOnlyList<string> paths, Action<int, int> progress = null)
+        {
+            int deleted = 0, done = 0;
+            _suppressDestEvents = true;
+            try
+            {
+                foreach (var f in paths)
+                {
+                    try { RecycleBin.Delete(f); deleted++; }
+                    catch (Exception ex) { Logger.Warn($"Could not delete {Path.GetFileName(f)}: {ex.Message}"); }
+                    progress?.Invoke(++done, paths.Count);
+                }
+                if (deleted > 0)
+                    Logger.Log($"Deleted {deleted} selected backup file{(deleted == 1 ? "" : "s")} " +
+                               "(sent to the Recycle Bin).");
+            }
+            finally
+            {
+                _unsuppressTimer ??= new Timer(_ => _suppressDestEvents = false);
+                _unsuppressTimer.Change(3000, Timeout.Infinite);
+            }
+            return deleted;
         }
 
         // Given a path relative to a type folder, find the {game} segment using the

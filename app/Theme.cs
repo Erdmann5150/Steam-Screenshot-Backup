@@ -63,6 +63,26 @@ namespace SteamScreenshotBackup
         [DllImport("dwmapi.dll", PreserveSig = true)]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(IntPtr hWnd, string appName, string idList);
+
+        // Gives a scrolling control (ListView, TreeView, DataGridView, AutoScroll panel)
+        // dark or light native scrollbars/headers that match the active theme, and keeps
+        // them in sync when the user switches themes. Safe to call before the handle
+        // exists \u2014 it re-applies on HandleCreated \u2014 and self-detaches on dispose.
+        public static void ApplyScrollbars(Control c)
+        {
+            void Apply()
+            {
+                if (c.IsDisposed || !c.IsHandleCreated) return;
+                try { SetWindowTheme(c.Handle, Dark ? "DarkMode_Explorer" : "Explorer", null); } catch { }
+            }
+            if (c.IsHandleCreated) Apply();
+            else c.HandleCreated += (s, e) => Apply();
+            Changed += Apply;
+            c.Disposed += (s, e) => Changed -= Apply;
+        }
+
         // Base styling every window goes through: colors, font, icon, matching title bar.
         public static void ApplyWindow(Form f)
         {

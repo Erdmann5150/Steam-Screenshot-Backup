@@ -13,7 +13,7 @@ namespace SteamScreenshotBackup
     // date written per file is cached so we don't re-scan the whole log every append.
     internal class MarkdownIndex
     {
-        private const string FileName = "_Screenshot_Log.md";
+        public const string FileName = "_Screenshot_Log.md";
 
         private readonly object _lock = new object();
         private readonly Dictionary<string, string> _lastDate =

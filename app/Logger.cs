@@ -61,6 +61,40 @@ namespace SteamScreenshotBackup
             }
         }
 
+        // Count and total size of the current log file plus its rotated archives, for
+        // the "are you sure" prompt shown before ClearLogs actually deletes them.
+        public static (int Count, long Bytes) PreviewLogFiles()
+        {
+            int count = 0; long bytes = 0;
+            lock (Lock)
+            {
+                for (int i = 0; i <= KeptArchives; i++)
+                {
+                    string f = i == 0 ? LogFilePath : LogFilePath + "." + i;
+                    if (!File.Exists(f)) continue;
+                    count++;
+                    try { bytes += new FileInfo(f).Length; } catch { }
+                }
+            }
+            return (count, bytes);
+        }
+
+        // Sends the log file and its rotated archives to the Recycle Bin and clears the
+        // in-memory activity list. A fresh log starts on the very next write.
+        public static void ClearLogs()
+        {
+            lock (Lock)
+            {
+                Entries.Clear();
+                for (int i = 0; i <= KeptArchives; i++)
+                {
+                    string f = i == 0 ? LogFilePath : LogFilePath + "." + i;
+                    try { RecycleBin.Delete(f); } catch { }
+                }
+                _loaded = true;   // there's nothing left on disk to fold back in
+            }
+        }
+
         private static void Write(LogLevel level, string message, string filePath = null)
         {
             var entry = new LogEntry(level, message, filePath);
