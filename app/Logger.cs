@@ -74,8 +74,11 @@ namespace SteamScreenshotBackup
                 {
                     Directory.CreateDirectory(Settings.Dir);
                     RotateIfNeeded();
+                    // The optional file path is stored after a tab so the activity window
+                    // can still "reveal in Explorer" for entries reloaded from disk.
+                    string tail = filePath != null ? "\t" + filePath : "";
                     File.AppendAllText(LogFilePath,
-                        $"{entry.Time:yyyy-MM-dd HH:mm:ss}  [{level,-8}]  {message}{Environment.NewLine}");
+                        $"{entry.Time:yyyy-MM-dd HH:mm:ss}  [{level,-8}]  {message}{tail}{Environment.NewLine}");
                 }
                 catch { }   // logging must never take the app down
             }
@@ -100,7 +103,13 @@ namespace SteamScreenshotBackup
                     if (!DateTime.TryParse(m.Groups[1].Value, out var t)) t = DateTime.Now;
                     if (!Enum.TryParse<LogLevel>(m.Groups[2].Value, ignoreCase: true, out var level))
                         level = LogLevel.Info;
-                    Entries.Add(new LogEntry(level, m.Groups[3].Value, null, t));
+
+                    // Split the optional tab-delimited file path back off the message.
+                    string msg = m.Groups[3].Value;
+                    string filePath = null;
+                    int tab = msg.IndexOf('\t');
+                    if (tab >= 0) { filePath = msg[(tab + 1)..]; msg = msg[..tab]; }
+                    Entries.Add(new LogEntry(level, msg, filePath, t));
                 }
             }
             catch { }

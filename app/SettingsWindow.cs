@@ -25,7 +25,8 @@ namespace SteamScreenshotBackup
 
         private readonly TextBox _dest;
         private readonly TextBox _highResFolder;
-        private readonly CheckBox _standard, _highRes, _autoStart, _autoRestore, _deleteOriginals, _showNotifications;
+        private readonly CheckBox _standard, _highRes, _autoStart, _autoRestore, _deleteOriginals,
+                                  _showNotifications, _markdownIndex, _previewImport;
         private readonly ComboBox _layout, _theme;
         private bool _suppressDangerPrompt;   // guards the enable-confirmation loop
 
@@ -40,7 +41,8 @@ namespace SteamScreenshotBackup
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(560, 752);
+            ClientSize = new Size(577, 640);
+            AutoScroll = true;   // the settings list has outgrown a fixed height
             Theme.ApplyWindow(this);
 
             int y = 20;
@@ -148,6 +150,38 @@ namespace SteamScreenshotBackup
             _layout.SelectedIndex = idx >= 0 ? idx : 0;
             Controls.Add(_layout);
             y += 44;
+
+            // ----- importing / index -----
+            Section("IMPORTING");
+            _markdownIndex = new CheckBox
+            {
+                Text = "Generate a Markdown index (_Screenshot_Log.md) in each folder",
+                Checked = _settings.GenerateMarkdownIndex,
+                AutoSize = true,
+                Location = new Point(24, y),
+                ForeColor = Theme.Text
+            };
+            Controls.Add(_markdownIndex);
+            y += 28;
+            _previewImport = new CheckBox
+            {
+                Text = "Preview a list of changes before importing batches",
+                Checked = _settings.PreviewBeforeImport,
+                AutoSize = true,
+                Location = new Point(24, y),
+                ForeColor = Theme.Text
+            };
+            Controls.Add(_previewImport);
+            y += 26;
+            Controls.Add(new Label
+            {
+                Text = "Real-time captures during play are never interrupted; this only affects batch scans.",
+                Font = Theme.SmallFont,
+                ForeColor = Theme.TextDim,
+                AutoSize = true,
+                Location = new Point(42, y)
+            });
+            y += 34;
 
             // ----- appearance / startup -----
             Section("APPEARANCE");
@@ -374,6 +408,43 @@ namespace SteamScreenshotBackup
             progress.ShowDialog(this);
         }
 
+        private void RunMarkdownRebuild()
+        {
+            var progress = new Form
+            {
+                Text = "Generating index\u2026",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                ControlBox = false,
+                StartPosition = FormStartPosition.CenterParent,
+                ClientSize = new Size(380, 96)
+            };
+            Theme.ApplyWindow(progress);
+            var label = new Label
+            {
+                Text = "Writing _Screenshot_Log.md files\u2026",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = Theme.Text
+            };
+            progress.Controls.Add(label);
+
+            var engine = _app.Engine;
+            progress.Shown += (s, e) => Task.Run(() =>
+            {
+                try
+                {
+                    engine.RebuildMarkdownIndex((done, total) =>
+                    {
+                        try { progress.BeginInvoke(new Action(() => label.Text = $"Writing index\u2026 {done} / {total} folders")); }
+                        catch { }
+                    });
+                }
+                catch (Exception ex) { Logger.Error("Markdown rebuild failed: " + ex.Message); }
+                finally { try { progress.BeginInvoke(new Action(progress.Close)); } catch { } }
+            });
+            progress.ShowDialog(this);
+        }
+
         private bool TypeBackupExists(ScreenshotType type)
         {
             try
@@ -453,6 +524,9 @@ namespace SteamScreenshotBackup
             _settings.HighResFolderOverride = newOverride.Length == 0 ? null : newOverride;
             _settings.AutoRestore = _autoRestore.Checked;
             _settings.ShowNotifications = _showNotifications.Checked;
+            bool markdownNewlyEnabled = _markdownIndex.Checked && !_settings.GenerateMarkdownIndex;
+            _settings.GenerateMarkdownIndex = _markdownIndex.Checked;
+            _settings.PreviewBeforeImport = _previewImport.Checked;
             bool deleteOriginalsNewlyEnabled = _deleteOriginals.Checked && !_settings.DeleteOriginals;
             _settings.DeleteOriginals = _deleteOriginals.Checked;
             _settings.Theme = _theme.SelectedIndex switch
@@ -480,14 +554,17 @@ namespace SteamScreenshotBackup
             if (templateChanged)
             {
                 _settings.FolderTemplate = newTemplate;
-                if (BackupExists(_settings.Destination) && MessageDialog.AskYesNo(
-                        "Reorganize the existing backup into the new folder layout now?\n\n" +
-                        "Choosing No applies the layout to new screenshots only, and the " +
-                        "next scan may re-copy older ones into the new layout.",
-                        "Reorganize backup"))
+                if (BackupExists(_settings.Destination))
                 {
-                    var engine = _app.Engine;
-                    Task.Run(() => engine.ReorganizeLayout(oldTemplate, newTemplate));
+                    var plan = _app.Engine.PlanReorganize(oldTemplate, newTemplate);
+                    if (plan.Count > 0 && PreviewWindow.Confirm(
+                            "Preview reorganization",
+                            $"{plan.Count} file{(plan.Count == 1 ? "" : "s")} will be moved to match the new layout:",
+                            plan, "Reorganize"))
+                    {
+                        var engine = _app.Engine;
+                        Task.Run(() => engine.ReorganizeLayout(oldTemplate, newTemplate));
+                    }
                 }
             }
 
@@ -507,6 +584,16 @@ namespace SteamScreenshotBackup
                     "They will be sent to the Windows Recycle Bin (recoverable). Choose No to keep them.",
                     "Delete High Resolution backups?"))
                 RunTypeDelete(ScreenshotType.HighRes);
+
+            // Newly enabled markdown index: offer to generate it for existing folders.
+            if (markdownNewlyEnabled && BackupExists(_settings.Destination) && MessageDialog.AskYesNo(
+                    "Generate the Markdown index for your existing backup folders now?\n\n" +
+                    "This writes a _Screenshot_Log.md into each game folder covering the screenshots " +
+                    "already backed up. Choose No to only index screenshots backed up from here on.",
+                    "Generate index for existing folders?"))
+            {
+                RunMarkdownRebuild();
+            }
 
             // Newly enabled: offer to clean up originals that were already imported.
             if (deleteOriginalsNewlyEnabled && MessageDialog.AskYesNo(

@@ -135,6 +135,8 @@ namespace SteamScreenshotBackup
                     _settings.DeleteOriginals = true;
                 if (k?.GetValue("NotificationsOffDefault") is int n && n == 1)
                     _settings.ShowNotifications = false;
+                if (k?.GetValue("PreviewImportsDefault") is int p && p == 1)
+                    _settings.PreviewBeforeImport = true;
             }
             catch { }
 
@@ -191,10 +193,36 @@ namespace SteamScreenshotBackup
         private void RunScan(RunKind kind)
         {
             if (_engine == null) return;
+
+            // The first-ever catch-up always previews; other batch scans preview only if
+            // the user opted in. Auto-restore and real-time captures never preview.
+            bool firstImport = kind == RunKind.Startup && !_settings.FirstImportDone;
+            bool wantPreview = kind != RunKind.Restore &&
+                (firstImport || (_settings.PreviewBeforeImport &&
+                    kind is RunKind.Manual or RunKind.Startup or RunKind.DestinationChanged));
+
             Task.Run(() =>
             {
                 try
                 {
+                    if (wantPreview)
+                    {
+                        var plan = _engine.PlanScan();
+                        if (firstImport) { _settings.FirstImportDone = true; _settings.Save(); }
+                        if (plan.Count > 0)
+                        {
+                            bool proceed = OnUiSync(() => PreviewWindow.Confirm(
+                                "Preview import",
+                                $"{plan.Count} screenshot{(plan.Count == 1 ? "" : "s")} will be imported into your backup:",
+                                plan, "Import"));
+                            if (!proceed)
+                            {
+                                Logger.Log($"Import cancelled from preview ({plan.Count} not imported).");
+                                return;
+                            }
+                        }
+                    }
+
                     var run = _engine.FullScan(restore: kind == RunKind.Restore);
                     if (run == null)
                     {
@@ -248,6 +276,14 @@ namespace SteamScreenshotBackup
         {
             if (_ui.InvokeRequired) _ui.BeginInvoke(a);
             else a();
+        }
+
+        // Runs a function on the UI thread and waits for its result (for modal prompts
+        // triggered from background scan tasks).
+        private T OnUiSync<T>(Func<T> f)
+        {
+            if (_ui.InvokeRequired) return (T)_ui.Invoke(f);
+            return f();
         }
 
         // ------------------------------------------------------------ autostart

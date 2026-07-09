@@ -20,7 +20,10 @@ namespace SteamScreenshotBackup
     {
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 
+        private const int StoreThrottleMs = 500;   // min gap between Steam store API calls
+
         private readonly object _lock = new object();
+        private readonly object _storeLock = new object();   // serializes + throttles store calls
         private readonly Dictionary<string, string> _manifestNames = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _cache = new Dictionary<string, string>();
         private readonly HashSet<string> _failedLookups = new HashSet<string>();   // per-session
@@ -28,6 +31,7 @@ namespace SteamScreenshotBackup
         private readonly string _cacheFile;
         private readonly string _steamPath;
         private DateTime _lastManifestScan = DateTime.MinValue;
+        private DateTime _lastStoreCall = DateTime.MinValue;
 
         public AppNameResolver(string steamPath)
         {
@@ -166,25 +170,39 @@ namespace SteamScreenshotBackup
             }
         }
 
+        // Queries the Steam store API for a name. Callers are always background threads
+        // (the copy worker / scan tasks), never the WinForms UI thread, so the throttle
+        // below never freezes the UI. Store calls are serialized and spaced at least
+        // StoreThrottleMs apart to avoid rate-limiting during large bulk imports; cached
+        // names never reach this method, so the delay only applies to real network calls.
         private string QueryStore(string appid)
         {
-            try
+            lock (_storeLock)
             {
-                string json = Http.GetStringAsync(
-                        $"https://store.steampowered.com/api/appdetails?appids={appid}&filters=basic")
-                    .GetAwaiter().GetResult();
-                Thread.Sleep(300);   // be polite to the store API
+                var wait = TimeSpan.FromMilliseconds(StoreThrottleMs) - (DateTime.UtcNow - _lastStoreCall);
+                if (wait > TimeSpan.Zero) Thread.Sleep(wait);
 
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty(appid, out var e) &&
-                    e.TryGetProperty("success", out var s) && s.GetBoolean() &&
-                    e.TryGetProperty("data", out var d) &&
-                    d.TryGetProperty("name", out var n))
-                    return n.GetString();
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn($"Name lookup failed for {appid}: {ex.Message}");
+                try
+                {
+                    string json = Http.GetStringAsync(
+                            $"https://store.steampowered.com/api/appdetails?appids={appid}&filters=basic")
+                        .GetAwaiter().GetResult();
+
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty(appid, out var e) &&
+                        e.TryGetProperty("success", out var s) && s.GetBoolean() &&
+                        e.TryGetProperty("data", out var d) &&
+                        d.TryGetProperty("name", out var n))
+                        return n.GetString();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"Name lookup failed for {appid}: {ex.Message}");
+                }
+                finally
+                {
+                    _lastStoreCall = DateTime.UtcNow;
+                }
             }
             return null;
         }

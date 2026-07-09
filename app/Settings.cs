@@ -34,6 +34,15 @@ namespace SteamScreenshotBackup
         // Set once existing backups have been given searchable metadata (one-time).
         public bool MetadataBackfilled { get; set; }
 
+        // Append each new backup to a "_Screenshot_Log.md" in its folder.
+        public bool GenerateMarkdownIndex { get; set; } = false;
+
+        // Show a preview of proposed changes before running a batch import/reorganize.
+        public bool PreviewBeforeImport { get; set; } = false;
+
+        // Set once the first-run catch-up preview has been offered (one-time).
+        public bool FirstImportDone { get; set; }
+
         // Folder layout under the type folder. Tokens: {game} {yyyy} {MM} {dd}
         public string FolderTemplate { get; set; } = "{game}";
 
