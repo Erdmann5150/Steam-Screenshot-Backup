@@ -31,84 +31,77 @@ Steam Screenshots/
 
 *The main window — total games and screenshots backed up, per-session counters, and a live activity feed you can filter by backups, restores, deletions, warnings, or info.*
 
+![The Utilities menu's targeted deletion window: a checkbox tree by backup type, game, and file](docs/img/targeted-delete.png)
+
+*Utilities → Delete specific files/folders — pick exactly which backup files to remove.*
+
+<details>
+<summary>More screenshots (Settings, Game Names, tray menu, installer, preview)</summary>
+
 <p align="center">
   <img src="docs/img/settings-general.png" alt="Settings window, General tab" width="49%">
   <img src="docs/img/settings-backup.png" alt="Settings window, Backup configuration tab" width="49%">
 </p>
 
-*Settings is split across two tabs so the window never needs a scrollbar. Left: General — theme, notifications, startup, the Markdown index and preview-before-import toggles, and deleted-file protection. Right: Backup configuration — backup folder, screenshot types, a manual high-resolution folder, folder layout, and the dangerous "delete originals after import" option.*
+*Settings — General (left) and Backup configuration (right).*
 
 <p align="center">
   <img src="docs/img/tray-menu.png" alt="Right-click tray menu" width="34%">
-  <img src="docs/img/game-names.png" alt="Game names window" width="49%">
+  <img src="docs/img/game-names.png" alt="Game Names window" width="49%">
 </p>
 
-*Left: the right-click tray menu (left-clicking the icon toggles the window). Right: Game names — fix delisted or non-Steam games by hand, or open the underlying tracking file directly.*
-
-![The Utilities menu's targeted deletion window: a checkbox tree by backup type, game, and file](docs/img/targeted-delete.png)
-
-*Utilities → Delete specific files/folders — pick exactly which backup files to remove from a checkbox tree (checking a type or game folder selects everything under it), with every deletion requiring a file-count-and-size confirmation before anything goes to the Recycle Bin.*
+*Left: the right-click tray menu. Right: Game Names — fix delisted or non-Steam games by hand.*
 
 ![The installer's task selection page](docs/img/installer.png)
 
-*The installer (dark to match the app) lets you choose startup, shortcuts, popup notifications, preview-before-import, and (dangerous) delete-originals-after-import; the main window opens automatically when setup finishes.*
+*The installer (dark to match the app) — pick startup, shortcut, and import options during setup.*
 
 ![The preview window listing original and proposed backup paths](docs/img/preview.png)
 
 *Optional preview before a batch import or reorganization — see exactly what will happen, then Import or Cancel.*
 
+</details>
+
 ## Key features
 
-- **Real game names** — resolved from local Steam manifests, the Steam store API
-  (cached forever), and even `shortcuts.vdf` for non-Steam games. Delisted games
-  can be named by hand in a built-in editor.
-- **Both screenshot types** — Steam's compressed library copies ("Standard") and
-  the uncompressed external copies ("High Resolution"), each with full parity:
-  live watching, retroactive import of existing files, and deletion restore.
-- **Readable, sortable filenames** — `YYYY-MM-DD HH.MM.SS`, so sorting by name is
-  sorting by capture time.
+- **Real game names** — resolved automatically, including delisted and
+  non-Steam games (which you can also rename by hand).
+- **Both screenshot types** — Steam's compressed "Standard" copies and the
+  uncompressed "High Resolution" external copies, both fully supported.
 - **Real-time backup** — every screenshot is copied within about a second of Steam
-  saving it. A catch-up scan at launch covers anything taken while the app was off.
-- **Self-healing backup** — delete a file (or a whole game folder) from the backup
-  and the app notices and logs it. With automatic restore on (the default),
-  anything still in Steam is copied straight back. Prefer to stay in control? Turn
-  it off and use **Re-Sync** to review everything in Steam that isn't in your
-  backup — grouped by game — and restore only what you pick.
-- **Searchable metadata** — the game name is injected into each backup copy as
-  standard Windows-readable properties (JPEG EXIF Title/Subject, PNG XMP) without
-  re-encoding a single pixel or changing the file's timestamps, so it shows up as
-  the file's **Title**/**Tags** in Explorer and is searchable in indexed locations.
-- **Custom folder layouts** — choose between `Game`, `Game\Year`, `Year\Game` and
-  more; existing backups can be reorganized in place. Handy for markdown journals
-  and personal knowledge bases.
-- **Markdown index** — optionally maintain a `_Screenshot_Log.md` in each folder
-  that embeds every screenshot under per-day headers, ready to drop into Obsidian
-  or any markdown vault. Can be generated retroactively for existing folders, and
-  turning it back off offers to clean up the files it left behind.
-- **Retroactive game-name tracking** — every backup run retries name resolution
-  for any folder that previously fell back to a placeholder name like
-  `AppID_<id>`, so games that couldn't be identified the first time (not yet
-  installed, a shortcut added later, etc.) get picked up automatically as soon
-  as they can be.
-- **Utilities menu** — one-click bulk cleanup (standard backups, high-resolution
-  backups, Markdown indexes, already-imported originals, application logs) plus a
-  granular deletion window with a checkbox tree by backup type, game, and file.
-  Every deletion — bulk or targeted — shows the exact file count and total size
-  before anything is sent to the Recycle Bin.
-- **Preview before importing** — optionally review a dry-run list of *Original →
-  Proposed backup path* before batch imports and layout reorganizations. Real-time
-  captures during play are never interrupted.
-- **Optional Steam cleanup** — turn on the (clearly-marked, dangerous) *Delete
-  originals after import* setting and each original is removed from Steam once it's
-  safely backed up. Deleted files go to the **Windows Recycle Bin**, so they stay
-  recoverable.
-- **Network-drive friendly** — if the destination is a NAS share that drops, the
-  app quietly queues work and resumes when it returns. No error spam.
-- **Dark and light themes** — or follow the Windows setting.
-- **Statistics** — total games, total screenshots and data, plus per-session counters,
-  right in the main window.
+  saving it, plus a catch-up scan at launch for anything taken while it was off.
+- **Self-healing backup** — delete a file from the backup and it's restored
+  automatically, or review and restore just what you want with **Re-Sync**.
+- **Searchable metadata** — the game name is embedded in each backup file, so
+  it shows up as searchable **Title**/**Tags** metadata in Explorer.
 - **Every Steam account** on the machine is covered, and Steam's own files are
   never modified.
+
+<details>
+<summary>Additional features</summary>
+
+- **Readable, sortable filenames** — `YYYY-MM-DD HH.MM.SS`, so sorting by name is
+  sorting by capture time.
+- **Custom folder layouts** — choose between `Game`, `Game\Year`, `Year\Game`
+  and more; existing backups can be reorganized in place.
+- **Markdown index** — optionally maintain a `_Screenshot_Log.md` in each folder
+  that embeds every screenshot under per-day headers, ready to drop into Obsidian
+  or any markdown vault.
+- **Retroactive game-name tracking** — every backup run retries name resolution
+  for games that couldn't be identified the first time.
+- **Utilities menu** — one-click bulk cleanup plus a window for picking exactly
+  which backup files to delete.
+- **Preview before importing** — optionally review what will happen before
+  batch imports and layout reorganizations.
+- **Optional Steam cleanup** — turn on the (clearly-marked, dangerous) *Delete
+  originals after import* setting and each original is removed from Steam once
+  it's safely backed up, recoverable from the Recycle Bin.
+- **Network-drive friendly** — if the destination drops, the app quietly queues
+  work and resumes when it returns.
+- **Dark and light themes** — or follow the Windows setting.
+- **Statistics** — total games, screenshots, and data, plus per-session counters.
+
+</details>
 
 ## Installation
 
@@ -146,38 +139,22 @@ Uninstall option cleans up after itself.
 
 ## Using the app
 
-- **Left-click** the tray icon to toggle the main window (show or hide it):
-  statistics, a live activity feed (backups, restores, deletions, warnings — all
-  filterable), and every action as a button — **Backup Now**, **Open Backup
-  Folder**, **Re-Sync**, **Pause Monitoring**, **Settings**, **Game Names**, and
-  **Utilities**. Double-click a backup entry to reveal the file in Explorer. The
-  current version is shown in the window's bottom corner.
-- **Right-click** the tray icon for the quick menu: Open, Backup Now, Re-Sync,
-  Open Backup Folder, Game Names, Pause Monitoring, Start with Windows, Settings,
-  Uninstall, Exit.
-- **Re-Sync** lists every screenshot in Steam that isn't in your backup, grouped
-  by game, with checkboxes so you can restore all of them or just a few.
-- **Settings** is split across two tabs so the window never needs a scrollbar.
-  *General* covers theme, popup notifications, autostart, the Markdown index and
-  preview-before-import toggles, and whether deleted backup files are restored
-  automatically. *Backup configuration* covers the backup folder (with optional
-  migration of existing files), screenshot types (turning one off offers to
-  Recycle-Bin its existing backups), a manual high-resolution folder for when it
-  can't be auto-detected, folder layout (with optional in-place reorganization),
-  and a dangerous *Delete originals after import* option (with a double
-  confirmation and an offer to apply it to already-imported screenshots).
-  Toggling the Markdown index either way offers to generate or clean up the
-  `_Screenshot_Log.md` files for your existing folders.
-- **Game Names** lets you fix delisted or non-Steam games without touching any
-  JSON by hand, or open the underlying tracking file directly in your default
-  editor. Every backup run also retries name resolution for games it couldn't
-  identify last time, so folders named `AppID_<id>` get picked up automatically
-  once they can be resolved.
-- **Utilities** covers one-click bulk cleanup (standard backups, high-resolution
-  backups, Markdown indexes, already-imported originals, application logs) plus
-  **Delete specific files/folders**, a checkbox tree by backup type, game, and
-  file for granular deletion. Every deletion here shows the exact file count and
-  total size before anything is sent to the Recycle Bin.
+- **Left-click** the tray icon to toggle the main window: statistics, a live
+  filterable activity feed, and every action as a button — **Backup Now**,
+  **Open Backup Folder**, **Re-Sync**, **Pause Monitoring**, **Settings**,
+  **Game Names**, **Utilities**. Double-click an entry to reveal the file in
+  Explorer.
+- **Right-click** the tray icon for the same actions in a quick menu, plus
+  Start with Windows, Uninstall, and Exit.
+- **Re-Sync** reviews everything in Steam that's missing from your backup,
+  grouped by game, so you can restore just what you pick.
+- **Settings** has two tabs: *General* (theme, notifications, startup, the
+  Markdown index) and *Backup configuration* (folder, screenshot types,
+  layout, and the danger zone).
+- **Game Names** fixes delisted or non-Steam games by hand, or opens the
+  tracking file directly.
+- **Utilities** has one-click bulk cleanup and a window for picking exactly
+  which files to delete.
 
 ### High-resolution screenshots
 
@@ -218,7 +195,7 @@ The two tools recognize each other's copies either way.
 ## Delisted games
 
 Games removed from the Steam store can't be resolved via the API. Fix them in
-the app under **Game names**, or add entries to
+the app under **Game Names**, or add entries to
 `%LOCALAPPDATA%\SteamScreenshotBackup\appnames.json` by hand:
 
 ```json
@@ -227,22 +204,10 @@ the app under **Game names**, or add entries to
 
 ## Resource usage and performance
 
-The app is designed to be invisible in day-to-day use:
-
-- **Idle cost is near zero.** Watching is done with native file-system change
-  notifications (`FileSystemWatcher`), not polling — no disk scanning while idle.
-- **Copies are streamed by the OS** and preserve original timestamps; metadata is
-  inserted losslessly (a few hundred bytes) without re-encoding image data.
-- **Name lookups are cached forever** in `appnames.json`; each game is resolved
-  once, ever, across both tools. Failed lookups are not retried within a session,
-  and uncached store-API calls are throttled (≥500 ms apart, on a background
-  thread) so bulk imports never rate-limit or block the UI.
-- **Logs are rotated** at ~1 MB with three retained archives, so disk usage stays
-  capped no matter how long the app runs.
-- **Offline destinations don't spin.** When a network destination drops, the app
-  checks every 20 seconds and queues work instead of retrying copies in a loop.
-- Memory footprint is a normal .NET tray app (tens of MB); CPU is effectively 0%
-  except during a scan or copy.
+Designed to be invisible day-to-day: idle cost is near zero (native file-system
+watching, not polling), copies preserve timestamps without re-encoding, game
+names are cached forever, logs are size-capped, and a dropped network
+destination is queued and retried quietly instead of erroring.
 
 ## Building from source
 
