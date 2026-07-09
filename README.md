@@ -32,11 +32,22 @@ Steam Screenshots/
 *The main window — total games and screenshots backed up, per-session counters, and a live activity feed you can filter by backups, restores, deletions, warnings, or info.*
 
 <p align="center">
-  <img src="docs/img/settings.png" alt="Settings window" width="49%">
-  <img src="docs/img/tray-menu.png" alt="Right-click tray menu" width="34%">
+  <img src="docs/img/settings-general.png" alt="Settings window, General tab" width="49%">
+  <img src="docs/img/settings-backup.png" alt="Settings window, Backup configuration tab" width="49%">
 </p>
 
-*Left: Settings — backup folder, screenshot types, a manual high-resolution folder, folder layout, theme, popup notifications, startup, deleted-file protection, and the dangerous "delete originals after import" option. Right: the right-click tray menu (left-clicking the icon toggles the window).*
+*Settings is split across two tabs so the window never needs a scrollbar. Left: General — theme, notifications, startup, the Markdown index and preview-before-import toggles, and deleted-file protection. Right: Backup configuration — backup folder, screenshot types, a manual high-resolution folder, folder layout, and the dangerous "delete originals after import" option.*
+
+<p align="center">
+  <img src="docs/img/tray-menu.png" alt="Right-click tray menu" width="34%">
+  <img src="docs/img/game-names.png" alt="Game names window" width="49%">
+</p>
+
+*Left: the right-click tray menu (left-clicking the icon toggles the window). Right: Game names — fix delisted or non-Steam games by hand, or open the underlying tracking file directly.*
+
+![The Utilities menu's targeted deletion window: a checkbox tree by backup type, game, and file](docs/img/targeted-delete.png)
+
+*Utilities → Delete specific files/folders — pick exactly which backup files to remove from a checkbox tree (checking a type or game folder selects everything under it), with every deletion requiring a file-count-and-size confirmation before anything goes to the Recycle Bin.*
 
 ![The installer's task selection page](docs/img/installer.png)
 
@@ -61,8 +72,8 @@ Steam Screenshots/
 - **Self-healing backup** — delete a file (or a whole game folder) from the backup
   and the app notices and logs it. With automatic restore on (the default),
   anything still in Steam is copied straight back. Prefer to stay in control? Turn
-  it off and use **Re-sync missing** to review everything in Steam that isn't in
-  your backup — grouped by game — and restore only what you pick.
+  it off and use **Re-Sync** to review everything in Steam that isn't in your
+  backup — grouped by game — and restore only what you pick.
 - **Searchable metadata** — the game name is injected into each backup copy as
   standard Windows-readable properties (JPEG EXIF Title/Subject, PNG XMP) without
   re-encoding a single pixel or changing the file's timestamps, so it shows up as
@@ -72,7 +83,18 @@ Steam Screenshots/
   and personal knowledge bases.
 - **Markdown index** — optionally maintain a `_Screenshot_Log.md` in each folder
   that embeds every screenshot under per-day headers, ready to drop into Obsidian
-  or any markdown vault. Can be generated retroactively for existing folders.
+  or any markdown vault. Can be generated retroactively for existing folders, and
+  turning it back off offers to clean up the files it left behind.
+- **Retroactive game-name tracking** — every backup run retries name resolution
+  for any folder that previously fell back to a placeholder name like
+  `AppID_<id>`, so games that couldn't be identified the first time (not yet
+  installed, a shortcut added later, etc.) get picked up automatically as soon
+  as they can be.
+- **Utilities menu** — one-click bulk cleanup (standard backups, high-resolution
+  backups, Markdown indexes, already-imported originals, application logs) plus a
+  granular deletion window with a checkbox tree by backup type, game, and file.
+  Every deletion — bulk or targeted — shows the exact file count and total size
+  before anything is sent to the Recycle Bin.
 - **Preview before importing** — optionally review a dry-run list of *Original →
   Proposed backup path* before batch imports and layout reorganizations. Real-time
   captures during play are never interrupted.
@@ -121,24 +143,36 @@ Uninstall option cleans up after itself.
 
 - **Left-click** the tray icon to toggle the main window (show or hide it):
   statistics, a live activity feed (backups, restores, deletions, warnings — all
-  filterable), and every action as a button. Double-click a backup entry to reveal
-  the file in Explorer. The current version is shown in the window's bottom corner.
-- **Right-click** the tray icon for the quick menu: Open, Back up now, Re-sync
-  missing screenshots, Open backup folder, Pause watching, Start with Windows,
-  Settings, Uninstall, Exit.
-- **Re-sync missing** lists every screenshot in Steam that isn't in your backup,
-  grouped by game, with checkboxes so you can restore all of them or just a few.
-- **Settings** covers the backup folder (with optional migration of existing
-  files), screenshot types (turning one off offers to Recycle-Bin its existing
-  backups), a manual high-resolution folder for when it can't be auto-detected,
-  folder layout (with optional in-place reorganization), a Markdown index and a
-  preview-before-import toggle, theme, popup notifications, autostart, whether
-  deleted backup files are restored automatically, and a dangerous *Delete
-  originals after import* option (with a double confirmation and an offer to apply
-  it to already-imported screenshots). Enabling the Markdown index also offers to
-  generate it for your existing folders.
-- **Game names** lets you fix delisted or non-Steam games without touching any
-  JSON by hand.
+  filterable), and every action as a button — **Backup Now**, **Open Backup
+  Folder**, **Re-Sync**, **Pause Monitoring**, **Settings**, **Game Names**, and
+  **Utilities**. Double-click a backup entry to reveal the file in Explorer. The
+  current version is shown in the window's bottom corner.
+- **Right-click** the tray icon for the quick menu: Open, Backup Now, Re-Sync,
+  Open Backup Folder, Game Names, Pause Monitoring, Start with Windows, Settings,
+  Uninstall, Exit.
+- **Re-Sync** lists every screenshot in Steam that isn't in your backup, grouped
+  by game, with checkboxes so you can restore all of them or just a few.
+- **Settings** is split across two tabs so the window never needs a scrollbar.
+  *General* covers theme, popup notifications, autostart, the Markdown index and
+  preview-before-import toggles, and whether deleted backup files are restored
+  automatically. *Backup configuration* covers the backup folder (with optional
+  migration of existing files), screenshot types (turning one off offers to
+  Recycle-Bin its existing backups), a manual high-resolution folder for when it
+  can't be auto-detected, folder layout (with optional in-place reorganization),
+  and a dangerous *Delete originals after import* option (with a double
+  confirmation and an offer to apply it to already-imported screenshots).
+  Toggling the Markdown index either way offers to generate or clean up the
+  `_Screenshot_Log.md` files for your existing folders.
+- **Game Names** lets you fix delisted or non-Steam games without touching any
+  JSON by hand, or open the underlying tracking file directly in your default
+  editor. Every backup run also retries name resolution for games it couldn't
+  identify last time, so folders named `AppID_<id>` get picked up automatically
+  once they can be resolved.
+- **Utilities** covers one-click bulk cleanup (standard backups, high-resolution
+  backups, Markdown indexes, already-imported originals, application logs) plus
+  **Delete specific files/folders**, a checkbox tree by backup type, game, and
+  file for granular deletion. Every deletion here shows the exact file count and
+  total size before anything is sent to the Recycle Bin.
 
 ### High-resolution screenshots
 
@@ -243,8 +277,10 @@ project is to be completely transparent about what it does behind the scenes.**
   removed unless you explicitly enable the dangerous *Delete originals after import*
   option — and even then, deletions go to the **Windows Recycle Bin**, never a
   permanent wipe.
-- Deleting backups (e.g. when you turn a screenshot type off) also goes to the
-  Recycle Bin, and is always something you confirm first.
+- Deleting backups — whether from turning a screenshot type off, the Utilities
+  menu's bulk actions, or the targeted deletion window — always goes to the
+  Recycle Bin, and always shows the exact file count and total size before you
+  confirm.
 - No telemetry, no accounts, no network calls except optional Steam store lookups
   to resolve game names (cached locally, one lookup per game, ever).
 - The full source is here. Nothing about how your files are handled is hidden — if
