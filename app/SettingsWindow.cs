@@ -516,19 +516,29 @@ namespace SteamScreenshotBackup
 
             if (templateChanged)
             {
-                _settings.FolderTemplate = newTemplate;
+                // Only adopt the new layout if there's nothing to move, or the user
+                // confirms moving existing files to match it. Otherwise the setting
+                // and the on-disk layout would disagree, breaking later scans (they'd
+                // compute the new-layout path for an existing file, not find it there,
+                // and wrongly treat it as missing).
+                bool applyTemplate = true;
                 if (BackupExists(_settings.Destination))
                 {
                     var plan = _app.Engine.PlanReorganize(oldTemplate, newTemplate);
-                    if (plan.Count > 0 && PreviewWindow.Confirm(
+                    if (plan.Count > 0)
+                    {
+                        applyTemplate = PreviewWindow.Confirm(
                             "Preview reorganization",
                             $"{plan.Count} file{(plan.Count == 1 ? "" : "s")} will be moved to match the new layout:",
-                            plan, "Reorganize"))
-                    {
-                        var engine = _app.Engine;
-                        Task.Run(() => engine.ReorganizeLayout(oldTemplate, newTemplate));
+                            plan, "Reorganize");
+                        if (applyTemplate)
+                        {
+                            var engine = _app.Engine;
+                            Task.Run(() => engine.ReorganizeLayout(oldTemplate, newTemplate));
+                        }
                     }
                 }
+                if (applyTemplate) _settings.FolderTemplate = newTemplate;
             }
 
             LogSettingChange("Backup folder", oldDest, _settings.Destination);
