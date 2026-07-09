@@ -1,10 +1,10 @@
 ; Inno Setup script for Steam Screenshot Backup.
 ; Build with build.ps1 at the repository root (it publishes the exe first and
 ; passes the version in), or manually:
-;   ISCC.exe setup.iss /DAppVersion=3.5.0 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
+;   ISCC.exe setup.iss /DAppVersion=3.5.1 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
 
 #ifndef AppVersion
-  #define AppVersion "3.5.0"
+  #define AppVersion "3.5.1"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\app\bin\Release\net8.0-windows\win-x64\publish"
