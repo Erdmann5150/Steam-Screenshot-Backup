@@ -179,7 +179,7 @@ namespace SteamScreenshotBackup
             Check(_autoRestore, "Automatically restore files deleted from the backup",
                 _settings.AutoRestore, Theme.Text);
             y += 26;
-            Hint("When off, deletions are only logged \u2014 recover them yourself from \"Re-sync missing\".");
+            Hint("When off, deletions are only logged \u2014 recover them yourself from \"Re-Sync\".");
             y += 28;
             int generalBottom = y;
 
@@ -284,7 +284,12 @@ namespace SteamScreenshotBackup
             _tabGeneral.Click += (s, e) => SelectTab(0);
             _tabBackup.Click += (s, e) => SelectTab(1);
 
+            // Invisible, non-visual control that soaks up the window's initial focus so
+            // nothing (e.g. the Appearance dropdown) opens looking pre-selected.
+            var focusCatcher = new Panel { TabStop = true, Size = new Size(0, 0), TabIndex = 0 };
+
             // ----- assemble (Fill first, then outer bars) -----
+            Controls.Add(focusCatcher);
             Controls.Add(contentHost);
             Controls.Add(footerEdge);
             Controls.Add(footer);
@@ -299,6 +304,7 @@ namespace SteamScreenshotBackup
             ClientSize = new Size(577, 46 + 1 + content + 1 + 60);
 
             SelectTab(0);
+            ActiveControl = focusCatcher;
         }
 
         private Button MakeTab(string text, int x, int width)

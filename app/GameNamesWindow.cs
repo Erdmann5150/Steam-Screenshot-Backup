@@ -19,7 +19,7 @@ namespace SteamScreenshotBackup
         {
             _resolver = resolver;
 
-            Text = "Game names \u2014 Steam Screenshot Backup";
+            Text = "Game Names \u2014 Steam Screenshot Backup";
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(560, 480);
             MinimumSize = new Size(460, 320);

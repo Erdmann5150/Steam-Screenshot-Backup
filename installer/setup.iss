@@ -18,7 +18,7 @@
 AppId={{7E6B1F63-1B0A-4B62-9E1D-52A9C7C5B8D4}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppPublisher=Steam Screenshot Backup project
+AppPublisher=Erdmann5150
 AppPublisherURL=https://github.com/Erdmann5150/Steam-Screenshot-Backup
 AppSupportURL=https://github.com/Erdmann5150/Steam-Screenshot-Backup/issues
 DefaultDirName={autopf}\{#AppName}

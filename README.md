@@ -124,6 +124,11 @@ Steam Screenshots/
 3. On first launch, choose your backup folder and which screenshot types to back
    up. That's the entire setup.
 
+**Updating to a new version?** Just download the latest installer and run it —
+no need to uninstall first. It installs directly over your existing copy in
+place and keeps your settings, game-name cache, and backed-up screenshots
+untouched.
+
 Uninstall any time from **Windows Settings → Apps** (or Control Panel →
 Programs). The uninstaller removes the app, its settings, cache, and autostart
 entry — your backed-up screenshots are never touched. The same uninstaller is
