@@ -1,10 +1,10 @@
 ; Inno Setup script for Steam Screenshot Backup.
 ; Build with build.ps1 at the repository root (it publishes the exe first and
 ; passes the version in), or manually:
-;   ISCC.exe setup.iss /DAppVersion=3.5.1 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
+;   ISCC.exe setup.iss /DAppVersion=3.6.0 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
 
 #ifndef AppVersion
-  #define AppVersion "3.5.1"
+  #define AppVersion "3.6.0"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\app\bin\Release\net8.0-windows\win-x64\publish"
@@ -81,59 +81,85 @@ Filename: "reg.exe"; Parameters: "delete ""HKCU\Software\Microsoft\Windows\Curre
 Type: filesandordirs; Name: "{localappdata}\SteamScreenshotBackup"
 
 [Code]
-// ----- best-effort dark theme for the wizard (matches the app) -----
+// ----- theme for the wizard (matches the app; user picks light or dark) -----
 function DwmSetWindowAttribute(hwnd: HWND; attr: Integer; var value: Integer; size: Integer): Integer;
   external 'DwmSetWindowAttribute@dwmapi.dll stdcall';
 
 const
-  clDarkBg    = $00251D16;   // TColor (BGR) of RGB(22,29,37)
+  // TColor (BGR) values, same palette as the app's Theme.cs.
+  clDarkBg    = $00251D16;   // RGB(22,29,37)
   clDarkPanel = $00342920;   // RGB(32,41,52)
-  clLightText = $00EBE2D6;   // RGB(214,226,235)
+  clDarkText  = $00EBE2D6;   // RGB(214,226,235)
+  clLiteBg    = $00FAF7F4;   // RGB(244,247,250)
+  clLitePanel = $00FFFFFF;   // RGB(255,255,255)
+  clLiteText  = $0032261A;   // RGB(26,38,50)
 
-procedure ApplyDarkTo(C: TControl);
+var
+  ThemePage: TInputOptionWizardPage;
+  IsDarkTheme: Boolean;
+
+procedure ApplyThemeTo(C: TControl; Dark: Boolean; Bg, Panel, Txt: TColor);
 var
   i: Integer;
 begin
   if C is TNewCheckListBox then begin
-    TNewCheckListBox(C).Color := clDarkBg;
-    TNewCheckListBox(C).Font.Color := clLightText;
+    TNewCheckListBox(C).Color := Bg;
+    TNewCheckListBox(C).Font.Color := Txt;
   end
-  else if C is TNewStaticText then TNewStaticText(C).Font.Color := clLightText
-  else if C is TNewCheckBox then TNewCheckBox(C).Font.Color := clLightText
-  else if C is TNewRadioButton then TNewRadioButton(C).Font.Color := clLightText
+  else if C is TNewStaticText then TNewStaticText(C).Font.Color := Txt
+  else if C is TNewCheckBox then TNewCheckBox(C).Font.Color := Txt
+  else if C is TNewRadioButton then TNewRadioButton(C).Font.Color := Txt
   else if C is TNewEdit then begin
-    TNewEdit(C).Color := clDarkPanel; TNewEdit(C).Font.Color := clLightText;
+    TNewEdit(C).Color := Panel; TNewEdit(C).Font.Color := Txt;
   end
   else if C is TNewMemo then begin
-    TNewMemo(C).Color := clDarkPanel; TNewMemo(C).Font.Color := clLightText;
+    TNewMemo(C).Color := Panel; TNewMemo(C).Font.Color := Txt;
   end
-  else if C is TNewNotebookPage then TNewNotebookPage(C).Color := clDarkBg
-  else if C is TPanel then TPanel(C).Color := clDarkBg;
+  else if C is TNewNotebookPage then TNewNotebookPage(C).Color := Bg
+  else if C is TPanel then TPanel(C).Color := Bg;
 
   if C is TWinControl then
     for i := 0 to TWinControl(C).ControlCount - 1 do
-      ApplyDarkTo(TWinControl(C).Controls[i]);
+      ApplyThemeTo(TWinControl(C).Controls[i], Dark, Bg, Panel, Txt);
 end;
 
-procedure ApplyDarkMode;
+procedure ApplyTheme;
 var
   v: Integer;
+  bg, panel, txt: TColor;
 begin
-  WizardForm.Color := clDarkBg;
-  WizardForm.MainPanel.Color := clDarkBg;
-  ApplyDarkTo(WizardForm);
-  v := 1;
-  DwmSetWindowAttribute(WizardForm.Handle, 20, v, SizeOf(v));   // dark title bar
+  if IsDarkTheme then begin bg := clDarkBg; panel := clDarkPanel; txt := clDarkText; end
+  else begin bg := clLiteBg; panel := clLitePanel; txt := clLiteText; end;
+
+  WizardForm.Color := bg;
+  WizardForm.MainPanel.Color := bg;
+  ApplyThemeTo(WizardForm, IsDarkTheme, bg, panel, txt);
+
+  if IsDarkTheme then v := 1 else v := 0;
+  DwmSetWindowAttribute(WizardForm.Handle, 20, v, SizeOf(v));   // dark/light title bar
 end;
 
 procedure InitializeWizard;
 begin
-  ApplyDarkMode;
+  IsDarkTheme := True;   // installer defaults to dark mode
+
+  ThemePage := CreateInputOptionPage(wpWelcome,
+    'Choose a Theme', 'Select the appearance for this setup wizard',
+    'This only changes how the installer looks, not the app itself - the app has its own ' +
+    'appearance setting.',
+    True, False);
+  ThemePage.Add('Dark (recommended)');
+  ThemePage.Add('Light');
+  ThemePage.SelectedValueIndex := 0;
+
+  ApplyTheme;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  ApplyDarkMode;   // re-theme controls created per page
+  if (ThemePage <> nil) and (CurPageID > ThemePage.ID) then
+    IsDarkTheme := ThemePage.SelectedValueIndex = 0;
+  ApplyTheme;   // re-theme controls created per page
 end;
 
 // Stop a running instance before installing over it.

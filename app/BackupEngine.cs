@@ -1240,6 +1240,7 @@ namespace SteamScreenshotBackup
             _resyncTimer?.Dispose();
             _offlineRetryTimer?.Dispose();
             _unsuppressTimer?.Dispose();
+            _resolver?.Dispose();
             _queue.CompleteAdding();
         }
     }

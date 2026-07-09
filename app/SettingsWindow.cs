@@ -470,6 +470,17 @@ namespace SteamScreenshotBackup
             bool standardTurnedOff = _settings.BackupStandard && !_standard.Checked;
             bool highResTurnedOff = _settings.BackupHighRes && !_highRes.Checked;
 
+            // Snapshot of every remaining field's old value, for the audit log below.
+            bool oldStandard = _settings.BackupStandard;
+            bool oldHighRes = _settings.BackupHighRes;
+            bool oldAutoRestore = _settings.AutoRestore;
+            bool oldShowNotifications = _settings.ShowNotifications;
+            bool oldMarkdownIndex = _settings.GenerateMarkdownIndex;
+            bool oldPreviewImport = _settings.PreviewBeforeImport;
+            bool oldDeleteOriginals = _settings.DeleteOriginals;
+            ThemeMode oldTheme = _settings.Theme;
+            bool oldAutoStart = _app.IsAutoStartEnabled;
+
             _settings.BackupStandard = _standard.Checked;
             _settings.BackupHighRes = _highRes.Checked;
             _settings.HighResFolderOverride = newOverride.Length == 0 ? null : newOverride;
@@ -520,6 +531,21 @@ namespace SteamScreenshotBackup
                 }
             }
 
+            LogSettingChange("Backup folder", oldDest, _settings.Destination);
+            LogSettingChange("Folder layout", oldTemplate, _settings.FolderTemplate);
+            LogSettingChange("High-resolution folder override",
+                oldOverride.Length == 0 ? "(auto-detect)" : oldOverride,
+                _settings.HighResFolderOverride ?? "(auto-detect)");
+            LogSettingChange("Backup standard screenshots", oldStandard, _settings.BackupStandard);
+            LogSettingChange("Backup high-resolution screenshots", oldHighRes, _settings.BackupHighRes);
+            LogSettingChange("Automatically restore deleted files", oldAutoRestore, _settings.AutoRestore);
+            LogSettingChange("Show popup notifications", oldShowNotifications, _settings.ShowNotifications);
+            LogSettingChange("Generate Markdown index", oldMarkdownIndex, _settings.GenerateMarkdownIndex);
+            LogSettingChange("Preview before import", oldPreviewImport, _settings.PreviewBeforeImport);
+            LogSettingChange("Delete originals after import", oldDeleteOriginals, _settings.DeleteOriginals);
+            LogSettingChange("Theme", oldTheme, _settings.Theme);
+            LogSettingChange("Start with Windows", oldAutoStart, _autoStart.Checked);
+
             _settings.Save();
             Theme.SetMode(_settings.Theme);
             _app.OnSettingsChanged(destChanged || typesChanged || overrideChanged);
@@ -568,6 +594,14 @@ namespace SteamScreenshotBackup
 
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        // Audit trail for Settings: one info-level log line per field that actually
+        // changed, naming the field and its new value. Silent when unchanged.
+        private static void LogSettingChange<T>(string name, T oldValue, T newValue)
+        {
+            if (!Equals(oldValue, newValue))
+                Logger.Log($"Setting changed: {name} = {newValue}");
         }
 
         private static bool BackupExists(string dest)

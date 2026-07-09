@@ -55,7 +55,8 @@ namespace SteamScreenshotBackup
                 BorderStyle = BorderStyle.None,
                 OwnerDraw = true,
                 BackColor = Theme.Background,
-                ForeColor = Theme.Text
+                ForeColor = Theme.Text,
+                SmallImageList = new ImageList { ImageSize = new Size(1, 26) }   // taller rows
             };
             _list.Columns.Add("Original", 460);
             _list.Columns.Add("Proposed backup path", 460);
@@ -137,10 +138,18 @@ namespace SteamScreenshotBackup
 
         private void DrawSubItem(object sender, DrawListViewSubItemEventArgs e)
         {
-            var bg = e.Item.Selected ? Theme.Selection : Theme.Background;
+            Color bg;
+            if (e.Item.Selected) bg = Theme.Selection;
+            else bg = e.ItemIndex % 2 == 0 ? Theme.Background : Theme.RowAlt;
             using (var b = new SolidBrush(bg)) e.Graphics.FillRectangle(b, e.Bounds);
+
+            // A faint divider under every row makes it easy to tell where one file's
+            // mapping ends and the next begins, even between two same-shade rows.
+            using (var edge = new Pen(Theme.PanelEdge))
+                e.Graphics.DrawLine(edge, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+
             Color fg = e.ColumnIndex == 0 ? Theme.TextDim : Theme.Text;
-            var r = new Rectangle(e.Bounds.X + 8, e.Bounds.Y, e.Bounds.Width - 10, e.Bounds.Height);
+            var r = new Rectangle(e.Bounds.X + 12, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height);
             TextRenderer.DrawText(e.Graphics, e.SubItem.Text, Font, r, fg,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.PathEllipsis);
         }

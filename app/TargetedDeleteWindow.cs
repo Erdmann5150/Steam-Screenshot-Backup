@@ -176,11 +176,32 @@ namespace SteamScreenshotBackup
             var files = CheckedFiles();
             long bytes = 0;
             foreach (var f in files) bytes += f.Size;
+            int folders = CheckedFolderCount();
 
             _summary.Text = files.Count == 0
                 ? "Nothing selected"
-                : $"{files.Count} file{(files.Count == 1 ? "" : "s")} selected  \u00B7  {MainWindow.FormatBytes(bytes)}";
+                : $"{folders} folder{(folders == 1 ? "" : "s")}, " +
+                  $"{files.Count} file{(files.Count == 1 ? "" : "s")} selected  \u00B7  {MainWindow.FormatBytes(bytes)}";
             _deleteBtn.Enabled = files.Count > 0;
+        }
+
+        // A "folder" (per-game node) counts as selected only when every file under it
+        // is checked \u2014 that's the case that actually means "this whole folder goes".
+        private int CheckedFolderCount()
+        {
+            int count = 0;
+            foreach (TreeNode typeNode in _tree.Nodes)
+                foreach (TreeNode gameNode in typeNode.Nodes)
+                    if (gameNode.Nodes.Count > 0 && AllChecked(gameNode))
+                        count++;
+            return count;
+        }
+
+        private static bool AllChecked(TreeNode node)
+        {
+            foreach (TreeNode child in node.Nodes)
+                if (!child.Checked) return false;
+            return true;
         }
 
         // ------------------------------------------------------------- deleting

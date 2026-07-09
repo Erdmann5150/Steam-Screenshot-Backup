@@ -14,32 +14,51 @@ namespace SteamScreenshotBackup
     //   1. app manifests of installed games (all library drives)
     //   2. the persistent name cache (shared with the PowerShell script)
     //   3. shortcuts.vdf for non-Steam games added to Steam
-    //   4. the Steam store API (result cached forever)
+    //   4. the Steam store API (result cached forever, but periodically re-verified
+    //      in the background \u2014 see RefreshStaleEntries)
     // Unresolvable ids fall back to "AppID_<id>" / "Non-Steam App <id>".
-    internal class AppNameResolver
+    internal class AppNameResolver : IDisposable
     {
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 
         private const int StoreThrottleMs = 500;   // min gap between Steam store API calls
 
+        // Background cache maintenance: names resolved from the store are cached
+        // forever (Steam appids essentially never get renamed), but rare cases do
+        // happen (Early Access -> 1.0 rebrand, etc.), so each entry gets silently
+        // re-verified against the store every RefreshAgeDays, a small batch at a
+        // time so a large cache never bursts a flood of API calls at once.
+        private static readonly TimeSpan RefreshInterval = TimeSpan.FromHours(24);
+        private static readonly TimeSpan RefreshFirstRun = TimeSpan.FromMinutes(2);
+        private const int RefreshBatchSize = 20;
+        private const int RefreshAgeDays = 30;
+
         private readonly object _lock = new object();
         private readonly object _storeLock = new object();   // serializes + throttles store calls
         private readonly Dictionary<string, string> _manifestNames = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _cache = new Dictionary<string, string>();
+        private readonly Dictionary<string, DateTime> _verifiedAt = new Dictionary<string, DateTime>();
         private readonly HashSet<string> _failedLookups = new HashSet<string>();   // per-session
         private Dictionary<ulong, string> _shortcutNames;
         private readonly string _cacheFile;
+        private readonly string _verifiedFile;
         private readonly string _steamPath;
         private DateTime _lastManifestScan = DateTime.MinValue;
         private DateTime _lastStoreCall = DateTime.MinValue;
+        private Timer _refreshTimer;
 
         public AppNameResolver(string steamPath)
         {
             _steamPath = steamPath;
             _cacheFile = Path.Combine(Settings.Dir, "appnames.json");   // shared with the PowerShell script
+            _verifiedFile = Path.Combine(Settings.Dir, "appnames.verified.json");
             LoadCache();
+            LoadVerified();
             ScanManifests();
+            _refreshTimer = new Timer(_ => RefreshStaleEntries(), null, RefreshFirstRun, RefreshInterval);
         }
+
+        public void Dispose() => _refreshTimer?.Dispose();
 
         public string ResolveFolderName(string appid)
         {
@@ -127,6 +146,7 @@ namespace SteamScreenshotBackup
             {
                 _cache.Remove(appid);
                 _failedLookups.Remove(appid);
+                _verifiedAt.Remove(appid);
             }
             SaveCache();
         }
@@ -152,6 +172,51 @@ namespace SteamScreenshotBackup
 
         // Path to the persistent game-name cache file, for "open in editor" actions.
         public string CacheFilePath => _cacheFile;
+
+        // ----- background cache maintenance -----
+
+        // Re-verifies a bounded batch of the oldest (or never-verified) store-resolved
+        // cache entries against the live store, so a rename/rebrand eventually gets
+        // picked up without ever hammering the API. Manifest- and shortcut-backed
+        // entries are skipped: those sources are already re-scanned fresh elsewhere.
+        // Runs on the timer's own thread pool thread; safe to call at any time.
+        private void RefreshStaleEntries()
+        {
+            List<string> batch;
+            lock (_lock)
+            {
+                var cutoff = DateTime.UtcNow.AddDays(-RefreshAgeDays);
+                batch = _cache.Keys
+                    .Where(id => !SteamConfig.IsNonSteamAppId(id) && !_manifestNames.ContainsKey(id))
+                    .Where(id => !_verifiedAt.TryGetValue(id, out var t) || t < cutoff)
+                    .OrderBy(id => _verifiedAt.TryGetValue(id, out var t) ? t : DateTime.MinValue)
+                    .Take(RefreshBatchSize)
+                    .ToList();
+            }
+            if (batch.Count == 0) return;
+
+            bool cacheChanged = false;
+            foreach (var appid in batch)
+            {
+                string fresh = QueryStore(appid);
+                if (fresh == null) continue;   // network/lookup failure; retry on a later pass
+
+                lock (_lock)
+                {
+                    if (!_cache.TryGetValue(appid, out var current)) continue;   // removed meanwhile
+                    if (current != fresh)
+                    {
+                        _cache[appid] = fresh;
+                        cacheChanged = true;
+                        Logger.Log($"Game name updated: \"{current}\" is now \"{fresh}\" ({appid}).");
+                    }
+                    _verifiedAt[appid] = DateTime.UtcNow;
+                }
+            }
+
+            if (cacheChanged) SaveCache();
+            SaveVerified();
+        }
 
         // ----- sources -----
 
@@ -271,6 +336,30 @@ namespace SteamScreenshotBackup
                 lock (_lock)
                     File.WriteAllText(_cacheFile,
                         JsonSerializer.Serialize(_cache, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch { }
+        }
+
+        private void LoadVerified()
+        {
+            try
+            {
+                if (!File.Exists(_verifiedFile)) return;
+                var d = JsonSerializer.Deserialize<Dictionary<string, DateTime>>(File.ReadAllText(_verifiedFile));
+                if (d != null)
+                    foreach (var kv in d) _verifiedAt[kv.Key] = kv.Value;
+            }
+            catch { }
+        }
+
+        private void SaveVerified()
+        {
+            try
+            {
+                Directory.CreateDirectory(Settings.Dir);
+                lock (_lock)
+                    File.WriteAllText(_verifiedFile,
+                        JsonSerializer.Serialize(_verifiedAt, new JsonSerializerOptions { WriteIndented = true }));
             }
             catch { }
         }

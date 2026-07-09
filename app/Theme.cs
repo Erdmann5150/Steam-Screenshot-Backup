@@ -22,6 +22,9 @@ namespace SteamScreenshotBackup
 
         // ----- palette (properties so they always reflect the active mode) -----
         public static Color Background => Dark ? Color.FromArgb(22, 29, 37)    : Color.FromArgb(244, 247, 250);
+        // A step subtler than Panel, for alternating rows in lists (distinguishable from
+        // both Background and Panel so it never gets mistaken for a section header).
+        public static Color RowAlt     => Dark ? Color.FromArgb(27, 35, 45)    : Color.FromArgb(236, 240, 244);
         public static Color Panel      => Dark ? Color.FromArgb(32, 41, 52)    : Color.FromArgb(255, 255, 255);
         public static Color PanelEdge  => Dark ? Color.FromArgb(53, 66, 82)    : Color.FromArgb(208, 216, 224);
         public static Color Text       => Dark ? Color.FromArgb(214, 226, 235) : Color.FromArgb(26, 38, 50);
