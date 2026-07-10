@@ -150,6 +150,7 @@ namespace SteamScreenshotBackup
                 Location = new Point(24, y)
             };
             Theme.StyleInput(_theme);
+            Theme.StyleComboBox(_theme);
             _theme.Items.AddRange(new object[] { "Dark", "Light", "Follow Windows setting" });
             _theme.SelectedIndex = _settings.Theme switch
             {
@@ -277,6 +278,7 @@ namespace SteamScreenshotBackup
                 Location = new Point(24, y)
             };
             Theme.StyleInput(_layout);
+            Theme.StyleComboBox(_layout);
             foreach (var p in LayoutPresets) _layout.Items.Add(p.Label);
             int idx = Array.FindIndex(LayoutPresets, p => p.Template == (_settings.FolderTemplate ?? "{game}"));
             _layout.SelectedIndex = idx >= 0 ? idx : 0;

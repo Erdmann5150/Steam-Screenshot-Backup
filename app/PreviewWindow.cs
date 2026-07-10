@@ -11,7 +11,7 @@ namespace SteamScreenshotBackup
     internal class PreviewWindow : Form
     {
         private readonly IReadOnlyList<(string From, string To)> _rows;
-        private readonly ListView _list;
+        private readonly FlatListView _list;
 
         // Returns true if the user chose Proceed.
         public static bool Confirm(string title, string description,
@@ -46,7 +46,7 @@ namespace SteamScreenshotBackup
             });
             var topEdge = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.PanelEdge };
 
-            _list = new ListView
+            _list = new FlatListView
             {
                 Dock = DockStyle.Fill,
                 View = View.Details,

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -14,7 +15,7 @@ namespace SteamScreenshotBackup
         private static MainWindow _open;
 
         private readonly TrayContext _app;
-        private readonly ListView _list;
+        private readonly FlatListView _list;
         private readonly ComboBox _filter;
         private readonly Label _count;
         private readonly Label _empty;
@@ -119,6 +120,7 @@ namespace SteamScreenshotBackup
             _filter.Items.AddRange(new object[]
                 { "All activity", "Backups", "Restores", "Deletions", "Warnings and errors", "Info" });
             _filter.SelectedIndex = 0;
+            Theme.StyleComboBox(_filter);
             _filter.SelectedIndexChanged += (s, e) => Reload();
             filterRow.Controls.Add(_filter);
 
@@ -168,7 +170,7 @@ namespace SteamScreenshotBackup
             _bottom.Controls.Add(version);
 
             // ----- activity list -----
-            _list = new ListView
+            _list = new FlatListView
             {
                 Dock = DockStyle.Fill,
                 View = View.Details,
@@ -457,10 +459,9 @@ namespace SteamScreenshotBackup
             if (_unresolvedCount <= 0) return;
             const int d = 10;
             var rect = new Rectangle(_namesBtn.Width - d - 4, 3, d, d);
-            using (var fill = new SolidBrush(Theme.Warning))
-                e.Graphics.FillEllipse(fill, rect);
-            using (var border = new Pen(Theme.Panel, 1.5f))
-                e.Graphics.DrawEllipse(border, rect);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var ring = new Pen(Theme.Warning, 2f);
+            e.Graphics.DrawEllipse(ring, rect);
         }
 
         internal static string FormatBytes(long b)
