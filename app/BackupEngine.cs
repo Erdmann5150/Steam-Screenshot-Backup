@@ -469,7 +469,12 @@ namespace SteamScreenshotBackup
                         else
                         {
                             stillUnresolved++;
-                            if (_notifiedUnresolved.Add(appid)) newlyUnresolved++;
+                            if (_notifiedUnresolved.Add(appid))
+                            {
+                                newlyUnresolved++;
+                                Logger.Warn($"Game folder could not be named automatically: " +
+                                            $"{Path.GetFileName(dir)} ({appid}) \u2014 open Game Names to identify it.");
+                            }
                         }
                     }
                 }
