@@ -95,6 +95,39 @@ if (Test-Path $nameCacheFile) {
     } catch { }
 }
 
+# --- Periodic re-verification of store-resolved names, mirrors the tray app ---
+# Names from the store are cached forever (Steam appids essentially never get
+# renamed), but rare cases do happen (Early Access -> 1.0 rebrand, etc.), so each
+# run re-checks a small batch of the oldest/never-verified entries against the
+# store. Manifest-backed (installed) and non-Steam shortcut ids are skipped: those
+# sources are already re-scanned fresh above. Verified timestamps live in
+# "appnames.verified.json", shared with the tray app the same way the name cache is.
+$verifiedFile = Join-Path $cacheDir 'appnames.verified.json'
+$script:verifiedAt = @{}
+if (Test-Path $verifiedFile) {
+    try {
+        ([System.IO.File]::ReadAllText($verifiedFile) | ConvertFrom-Json).PSObject.Properties |
+            ForEach-Object { $script:verifiedAt[$_.Name] = [datetime]$_.Value }
+    } catch { }
+}
+$refreshCutoff = (Get-Date).ToUniversalTime().AddDays(-30)
+$refreshBatch = $script:nameCache.Keys | Where-Object {
+    -not $appNames.ContainsKey($_) -and ([uint64]$_ -le [int]::MaxValue) -and
+    (-not $script:verifiedAt.ContainsKey($_) -or $script:verifiedAt[$_] -lt $refreshCutoff)
+} | Sort-Object { if ($script:verifiedAt.ContainsKey($_)) { $script:verifiedAt[$_] } else { [datetime]::MinValue } } |
+    Select-Object -First 20
+foreach ($appid in $refreshBatch) {
+    try {
+        $r = Invoke-RestMethod "https://store.steampowered.com/api/appdetails?appids=$appid&filters=basic" -UseBasicParsing
+        Start-Sleep -Milliseconds 300   # be polite to the store API
+        if ($r.$appid.success -and $r.$appid.data.name -and ($r.$appid.data.name -ne $script:nameCache[$appid])) {
+            Write-Host "Game name updated: `"$($script:nameCache[$appid])`" is now `"$($r.$appid.data.name)`" ($appid)."
+            $script:nameCache[$appid] = $r.$appid.data.name
+        }
+        if ($r.$appid.success) { $script:verifiedAt[$appid] = (Get-Date).ToUniversalTime() }
+    } catch { }
+}
+
 # --- Non-Steam shortcut names from each account's binary shortcuts.vdf ---
 $script:shortcutNames = @{}
 foreach ($sv in Get-ChildItem (Join-Path $steamPath 'userdata') -Recurse -Filter 'shortcuts.vdf' -ErrorAction SilentlyContinue) {
@@ -273,6 +306,11 @@ if ($script:nameCache.Count -gt 0) {
     New-Item $cacheDir -ItemType Directory -Force | Out-Null
     # UTF-8 without BOM, matching what the tray app writes; Set-Content would use ANSI on PS 5.1.
     [System.IO.File]::WriteAllText($nameCacheFile, ($script:nameCache | ConvertTo-Json),
+        (New-Object System.Text.UTF8Encoding($false)))
+}
+if ($script:verifiedAt.Count -gt 0) {
+    New-Item $cacheDir -ItemType Directory -Force | Out-Null
+    [System.IO.File]::WriteAllText($verifiedFile, ($script:verifiedAt | ConvertTo-Json),
         (New-Object System.Text.UTF8Encoding($false)))
 }
 Write-Host "Done. $copied new screenshots copied across $($games.Count) games | $skipped already backed up."
