@@ -543,7 +543,18 @@ namespace SteamScreenshotBackup
                         }
                     }
                 }
-                if (applyTemplate) _settings.FolderTemplate = newTemplate;
+                if (applyTemplate)
+                {
+                    _settings.FolderTemplate = newTemplate;
+                }
+                else
+                {
+                    // Declined the reorganize: the on-disk layout (and the setting) stay
+                    // on the old template, so the dropdown needs to match or it would show
+                    // a layout that was never actually applied.
+                    int oldIdx = Array.FindIndex(LayoutPresets, p => p.Template == oldTemplate);
+                    _layout.SelectedIndex = oldIdx >= 0 ? oldIdx : 0;
+                }
             }
 
             LogSettingChange("Backup Folder", oldDest, _settings.Destination);
