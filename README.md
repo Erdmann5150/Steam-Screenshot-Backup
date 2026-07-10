@@ -99,6 +99,9 @@ Steam Screenshots/
   it's safely backed up, recoverable from the Recycle Bin.
 - **Network-drive friendly.** If the destination becomes unreachable, the app
   waits and retries automatically, then catches up once it's back.
+- **Offline mode.** Skip Steam's store lookups entirely (a Settings toggle or
+  an installer checkbox), or download the dedicated offline-only portable
+  build with that code removed completely.
 - **Dark and light themes**, or follow the Windows setting.
 - **Statistics**: total games, screenshots, and data, plus per-session counters.
 
@@ -112,9 +115,9 @@ Steam Screenshots/
    [latest release](../../releases/latest).
 2. Run it. Pick an install folder (defaults to Program Files) and choose whether
    to start with Windows, add Start Menu / Desktop shortcuts, turn off popup
-   notifications, preview batches before importing, and (optionally, and flagged as
-   dangerous) delete originals after import. The main window opens automatically
-   when setup finishes.
+   notifications, enable offline mode, preview batches before importing, and
+   (optionally, and flagged as dangerous) delete originals after import. The
+   main window opens automatically when setup finishes.
 3. On first launch, choose your backup folder and which screenshot types to back
    up. That's the entire setup.
 
@@ -134,6 +137,11 @@ Prefer zero-install? Download `SteamScreenshotBackup.exe` (portable) from the
 release, put it anywhere, and run it. Identical functionality; the in-app
 Uninstall option cleans up after itself.
 
+A separate **offline-only** portable build, `SteamScreenshotBackup-Offline.exe`,
+is also available on the same release - identical, but with the Steam
+store name-lookup code removed entirely, for anyone who wants that guarantee
+at the binary level rather than a runtime setting.
+
 > **Windows SmartScreen:** the exe is unsigned, so the first run may show
 > *"Windows protected your PC."* Click **More info → Run anyway**, or build from
 > source (below) if you'd rather not trust a downloaded binary.
@@ -150,10 +158,10 @@ Uninstall option cleans up after itself.
 - **Re-Sync** reviews everything in Steam that's missing from your backup,
   grouped by game, so you can restore just what you pick.
 - **Settings** has two tabs: *General* (theme, notifications, startup, the
-  Markdown index) and *Backup Configuration* (folder, screenshot types,
-  layout, and the danger zone). **Apply** saves in the background without
-  closing the window, so you can keep adjusting settings; **Close** just
-  closes it.
+  Markdown index, offline mode) and *Backup Configuration* (folder, screenshot
+  types, layout, and the danger zone). **Apply** saves in the background
+  without closing the window, so you can keep adjusting settings; **Close**
+  just closes it.
 - **Game Names** fixes delisted or non-Steam games by hand, or opens the
   tracking file directly. Folders it couldn't name on its own are highlighted
   at the top of the list; select one and click **Open Folder** to see the
@@ -222,7 +230,7 @@ Requires the .NET 8 SDK (`winget install Microsoft.DotNet.SDK.8`); the installer
 additionally needs Inno Setup 6 (`winget install JRSoftware.InnoSetup`):
 
 ```powershell
-.\build.ps1     # produces dist\portable and dist\installer
+.\build.ps1     # produces dist\portable, dist\portable-offline, and dist\installer
 ```
 
 For a quick development run: `dotnet run` inside `app\`.
@@ -261,8 +269,11 @@ delete from them if you turn that on. Specifics:
   known locally (installed-game manifests, the existing cache), and
   periodically re-checked in the background for names already resolved this
   way. Only the app ID is sent, never screenshot data, filenames, or anything
-  else; there's no telemetry and no account of any kind. There's currently no
-  setting to disable these lookups.
+  else; there's no telemetry and no account of any kind. Turn on **Offline
+  mode** (Settings → General, or an installer checkbox) to skip these lookups
+  entirely - unresolved games just get an `AppID_<id>` folder name instead,
+  or download the dedicated offline-only portable build with that code
+  removed completely.
 - The source is all here, so anything about how it handles your files can be
   checked directly instead of taken on faith.
 
@@ -291,8 +302,10 @@ data, ever - see [What it does with your files](#what-it-does-with-your-files).
 The app does automatically make read-only network calls to the Steam store to
 resolve an app ID into a game name (only when it can't be found locally, plus
 a periodic background re-check of names resolved this way) - only the numeric
-app ID is sent, nothing else, and there's currently no setting to turn this
-off. No telemetry, no account, no analytics of any kind.
+app ID is sent, nothing else. Turn on **Offline mode** in Settings (or during
+install) to disable these lookups entirely, or use the offline-only portable
+build, which has that code removed at compile time. No telemetry, no account,
+no analytics of any kind.
 
 **Can it delete my screenshots?** Only if you turn on *Delete originals after
 import*, which is off by default and marked as dangerous. Even then, deletions
