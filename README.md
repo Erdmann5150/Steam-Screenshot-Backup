@@ -256,8 +256,13 @@ delete from them if you turn that on. Specifics:
 - Any deletion of backup files (turning a screenshot type off, the Utilities
   menu's bulk actions, or the Granular Deletion window) goes to the Recycle
   Bin and shows the file count and total size before you confirm.
-- The only network calls are optional Steam store lookups to resolve game
-  names; there's no telemetry and no account of any kind.
+- The only network calls are automatic, read-only Steam store lookups to
+  resolve an app ID into a game name - made only when the name isn't already
+  known locally (installed-game manifests, the existing cache), and
+  periodically re-checked in the background for names already resolved this
+  way. Only the app ID is sent, never screenshot data, filenames, or anything
+  else; there's no telemetry and no account of any kind. There's currently no
+  setting to disable these lookups.
 - The source is all here, so anything about how it handles your files can be
   checked directly instead of taken on faith.
 
@@ -281,10 +286,13 @@ high false-positive rate on unsigned .NET single-file builds. Every major
 engine (Defender, ESET, BitDefender, Malwarebytes, Kaspersky, etc.) is clean
 on both.
 
-**Does this upload my screenshots anywhere?** No. See
-[What it does with your files](#what-it-does-with-your-files) - the only
-network calls are optional, read-only Steam store lookups to resolve game
-names. No screenshot data leaves your machine, no telemetry, no account.
+**Does this upload my screenshots anywhere? Does it phone home?** No screenshot
+data, ever - see [What it does with your files](#what-it-does-with-your-files).
+The app does automatically make read-only network calls to the Steam store to
+resolve an app ID into a game name (only when it can't be found locally, plus
+a periodic background re-check of names resolved this way) - only the numeric
+app ID is sent, nothing else, and there's currently no setting to turn this
+off. No telemetry, no account, no analytics of any kind.
 
 **Can it delete my screenshots?** Only if you turn on *Delete originals after
 import*, which is off by default and marked as dangerous. Even then, deletions
