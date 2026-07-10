@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -88,7 +87,6 @@ namespace SteamScreenshotBackup
                 new GameNamesWindow(_app.Engine).ShowDialog(this);
                 RefreshUnresolvedBadge();   // names may have just been fixed
             };
-            _namesBtn.Paint += DrawUnresolvedBadge;
             var utilities = MakeButton("\u2699 Utilities", 120);
             utilities.Click += (s, e) => ShowUtilitiesMenu(utilities);
 
@@ -367,6 +365,7 @@ namespace SteamScreenshotBackup
             foreach (var e in _edges) e.BackColor = Theme.PanelEdge;
             foreach (Control c in _top.Controls)
                 if (c is Button b) Theme.StyleButton(b, (bool)b.Tag);
+            ApplyUnresolvedHighlight();
             foreach (Control c in _bottom.Controls)
             {
                 if (c is Button b) Theme.StyleButton(b, (bool)b.Tag);
@@ -449,19 +448,23 @@ namespace SteamScreenshotBackup
             _tip.SetToolTip(_namesBtn, count > 0
                 ? $"{count} game folder{(count == 1 ? "" : "s")} couldn't be named automatically"
                 : null);
-            _namesBtn.Invalidate();
+            ApplyUnresolvedHighlight();
         }
 
-        // A small dot in the button's top-right corner, since the button's own text
-        // stays fixed-width ("Game Names") and a toast notification alone is easy to miss.
-        private void DrawUnresolvedBadge(object sender, PaintEventArgs e)
+        // The button's own text stays fixed-width ("Game Names") and a toast notification
+        // alone is easy to miss, so an unresolved game instead swaps the button's normal
+        // grayish border for a highlighted warning-colored one.
+        private void ApplyUnresolvedHighlight()
         {
-            if (_unresolvedCount <= 0) return;
-            const int d = 10;
-            var rect = new Rectangle(_namesBtn.Width - d - 4, 3, d, d);
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var ring = new Pen(Theme.Warning, 2f);
-            e.Graphics.DrawEllipse(ring, rect);
+            if (_unresolvedCount > 0)
+            {
+                _namesBtn.FlatAppearance.BorderColor = Theme.Warning;
+                _namesBtn.FlatAppearance.BorderSize = 2;
+            }
+            else
+            {
+                Theme.StyleButton(_namesBtn, false);
+            }
         }
 
         internal static string FormatBytes(long b)
