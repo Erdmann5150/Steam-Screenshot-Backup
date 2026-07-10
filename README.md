@@ -261,6 +261,32 @@ delete from them if you turn that on. Specifics:
 - The source is all here, so anything about how it handles your files can be
   checked directly instead of taken on faith.
 
+## FAQ
+
+**Windows says this is unsafe / SmartScreen blocked it.** That's SmartScreen
+flagging an unsigned binary, not a specific finding about this app - it does
+that for any new, unsigned exe. Click **More info -> Run anyway** if you're
+comfortable, or build from source (above) if you'd rather not.
+
+**Why is the exe unsigned?** Cost - an EV code-signing certificate is a real
+recurring expense for a free hobby project. The source is public if you want
+to verify or build it yourself instead of trusting the download.
+
+**Does this upload my screenshots anywhere?** No. See
+[What it does with your files](#what-it-does-with-your-files) - the only
+network calls are optional, read-only Steam store lookups to resolve game
+names. No screenshot data leaves your machine, no telemetry, no account.
+
+**Can it delete my screenshots?** Only if you turn on *Delete originals after
+import*, which is off by default and marked as dangerous. Even then, deletions
+go to the Recycle Bin, not a permanent delete.
+
+**Will this work on Steam Deck / Linux / macOS?** No - it's a Windows-only
+WinForms app for now, with no firm plans to change that.
+
+**Checksums for the downloads?** Published in each
+[release's](../../releases) notes.
+
 ## Disclaimer
 
 This project was generated with [Claude Code](https://claude.com/claude-code)
