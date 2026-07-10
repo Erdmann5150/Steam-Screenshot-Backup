@@ -17,10 +17,25 @@
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 
+# Check if the process is running
+$running = Get-Process SteamScreenshotBackup -ErrorAction SilentlyContinue
+if ($running) { throw "Stop any running SteamScreenshotBackup instance first" }
+
 # Version comes from the csproj so it only lives in one place.
 $csproj = Join-Path $root 'app\SteamScreenshotBackup.csproj'
 $version = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version
 if (-not $version) { throw "Version not found in $csproj" }
+
+# Validate version matches setup.iss (must be bumped in both places)
+$iss = Join-Path $root 'installer\setup.iss'
+$issContent = Get-Content $iss -Raw
+if ($issContent -match '#define AppVersion\s+"([^"]+)"') {
+    $issVersion = $matches[1]
+    if ($issVersion -ne $version) {
+        throw "Version mismatch: csproj has $version, setup.iss has $issVersion. Both must be updated together."
+    }
+}
+
 Write-Host "Building Steam Screenshot Backup $version" -ForegroundColor Cyan
 
 # --- 1. Publish the self-contained single-file exe (also the portable build) ---
@@ -49,7 +64,10 @@ Write-Host "Installer -> $distInstaller"
 $safe = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "SteamBackup Releases\v$version"
 New-Item $safe -ItemType Directory -Force | Out-Null
 Copy-Item (Join-Path $distPortable 'SteamScreenshotBackup.exe') $safe -Force
-Copy-Item (Join-Path $distInstaller "SteamScreenshotBackup-Setup-$version.exe") $safe -Force
+
+$installerFile = Join-Path $distInstaller "SteamScreenshotBackup-Setup-$version.exe"
+if (-not (Test-Path $installerFile)) { throw "Installer not found at $installerFile" }
+Copy-Item $installerFile $safe -Force
 Write-Host "Safe copies -> $safe" -ForegroundColor Green
 
 Write-Host "Done." -ForegroundColor Green
