@@ -23,8 +23,8 @@ namespace SteamScreenshotBackup
 
             Text = "Game Names \u2014 Steam Screenshot Backup";
             StartPosition = FormStartPosition.CenterParent;
-            Size = new Size(560, 480);
-            MinimumSize = new Size(460, 320);
+            Size = new Size(680, 480);
+            MinimumSize = new Size(660, 320);
             AutoScaleMode = AutoScaleMode.Dpi;
             Theme.ApplyWindow(this);
 
@@ -34,8 +34,8 @@ namespace SteamScreenshotBackup
                     ? "Fix names for delisted or non-Steam games. Installed games are named\n" +
                       "straight from Steam and do not need entries here."
                     : $"{unresolved.Count} game folder{(unresolved.Count == 1 ? "" : "s")} could not be " +
-                      "named automatically (highlighted below). Click \"Open Folder\" to view its\n" +
-                      "screenshots, then type the game's name.",
+                      "named automatically (highlighted below). Select one and click \"Open\n" +
+                      "Folder\" to view its screenshots, then type the game's name.",
                 Dock = DockStyle.Top,
                 Height = 48,
                 Padding = new Padding(14, 8, 14, 0),
@@ -72,46 +72,23 @@ namespace SteamScreenshotBackup
             _grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = Theme.Text;
             Theme.ApplyScrollbars(_grid);
 
-            var colId = new DataGridViewTextBoxColumn { HeaderText = "App ID", FillWeight = 26 };
-            var colName = new DataGridViewTextBoxColumn { HeaderText = "Game Name", FillWeight = 54 };
+            var colId = new DataGridViewTextBoxColumn { HeaderText = "App ID", FillWeight = 30 };
+            var colName = new DataGridViewTextBoxColumn { HeaderText = "Game Name", FillWeight = 70 };
             _grid.Columns.Add(colId);
             _grid.Columns.Add(colName);
 
-            if (unresolved.Count > 0)
+            foreach (var (appid, folderPath) in unresolved)
             {
-                var colFolder = new DataGridViewButtonColumn
-                {
-                    HeaderText = "",
-                    UseColumnTextForButtonValue = false,
-                    FlatStyle = FlatStyle.Flat,
-                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-                    Width = 100
-                };
-                colFolder.DefaultCellStyle.BackColor = Theme.Panel;
-                colFolder.DefaultCellStyle.ForeColor = Theme.Text;
-                colFolder.DefaultCellStyle.SelectionBackColor = Theme.Panel;
-                colFolder.DefaultCellStyle.SelectionForeColor = Theme.Text;
-                _grid.Columns.Add(colFolder);
-                int folderColIndex = colFolder.Index;
-
-                foreach (var (appid, folderPath) in unresolved)
-                {
-                    _unresolvedIds.Add(appid);
-                    int i = _grid.Rows.Add(appid, "", "Open Folder");
-                    var row = _grid.Rows[i];
-                    row.Tag = folderPath;
-                    row.DefaultCellStyle.ForeColor = Theme.Warning;
-                }
-
-                _grid.CellContentClick += (s, e) =>
-                {
-                    if (e.RowIndex < 0 || e.ColumnIndex != folderColIndex) return;
-                    if (_grid.Rows[e.RowIndex].Tag is string path) OpenFolder(path);
-                };
+                _unresolvedIds.Add(appid);
+                int i = _grid.Rows.Add(appid, "");
+                var row = _grid.Rows[i];
+                row.Tag = folderPath;
+                row.DefaultCellStyle.ForeColor = Theme.Warning;
             }
-
             foreach (var kv in _resolver.GetCachedNames())
                 _grid.Rows.Add(kv.Key, kv.Value);
+
+            if (unresolved.Count > 0) _grid.CurrentCell = _grid.Rows[0].Cells[0];
 
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Theme.Panel };
             var footerEdge = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.PanelEdge };
@@ -130,6 +107,22 @@ namespace SteamScreenshotBackup
             Theme.StyleButton(openFile);
             openFile.Click += (s, e) => OpenTrackingFile();
             footer.Controls.Add(openFile);
+
+            if (unresolved.Count > 0)
+            {
+                var openFolder = new Button
+                    { Text = "Open Folder", Size = new Size(120, 32), Location = new Point(314, 12), Enabled = false };
+                Theme.StyleButton(openFolder);
+                openFolder.Click += (s, e) =>
+                {
+                    if (_grid.CurrentRow?.Tag is string path) OpenFolder(path);
+                };
+                footer.Controls.Add(openFolder);
+
+                void UpdateOpenFolderButton() => openFolder.Enabled = _grid.CurrentRow?.Tag is string;
+                _grid.CurrentCellChanged += (s, e) => UpdateOpenFolderButton();
+                UpdateOpenFolderButton();
+            }
 
             var close = new Button
             {
