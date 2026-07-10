@@ -272,6 +272,15 @@ comfortable, or build from source (above) if you'd rather not.
 recurring expense for a free hobby project. The source is public if you want
 to verify or build it yourself instead of trusting the download.
 
+**Is it actually safe? Antivirus/VirusTotal?** The installer scans
+[0/68 clean on VirusTotal](https://www.virustotal.com/gui/file/98629ed9845ec70582241cf1961d6d184333a81cc98e6dd6f48282e29bc58b1b/summary).
+The portable exe scans
+[1/66](https://www.virustotal.com/gui/file/29c40ad0b9adb049da94158e7bd40127985fc997e188c01f4ca60ffc3dcf227e/summary) -
+a generic heuristic from Zillya, a low-reputation engine with a known
+high false-positive rate on unsigned .NET single-file builds. Every major
+engine (Defender, ESET, BitDefender, Malwarebytes, Kaspersky, etc.) is clean
+on both.
+
 **Does this upload my screenshots anywhere?** No. See
 [What it does with your files](#what-it-does-with-your-files) - the only
 network calls are optional, read-only Steam store lookups to resolve game
