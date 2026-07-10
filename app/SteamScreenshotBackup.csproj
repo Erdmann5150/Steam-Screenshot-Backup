@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>SteamScreenshotBackup</AssemblyName>
     <RootNamespace>SteamScreenshotBackup</RootNamespace>
-    <Version>3.8.0</Version>
+    <Version>3.8.1</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Product>Steam Screenshot Backup</Product>
     <Description>Automatically backs up Steam screenshots into per-game folders with readable names.</Description>

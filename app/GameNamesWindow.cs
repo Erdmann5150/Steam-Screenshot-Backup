@@ -74,39 +74,44 @@ namespace SteamScreenshotBackup
 
             var colId = new DataGridViewTextBoxColumn { HeaderText = "App ID", FillWeight = 26 };
             var colName = new DataGridViewTextBoxColumn { HeaderText = "Game Name", FillWeight = 54 };
-            var colFolder = new DataGridViewButtonColumn
-            {
-                HeaderText = "",
-                UseColumnTextForButtonValue = false,
-                FlatStyle = FlatStyle.Flat,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-                Width = 100
-            };
-            colFolder.DefaultCellStyle.BackColor = Theme.Panel;
-            colFolder.DefaultCellStyle.ForeColor = Theme.Text;
-            colFolder.DefaultCellStyle.SelectionBackColor = Theme.Panel;
-            colFolder.DefaultCellStyle.SelectionForeColor = Theme.Text;
             _grid.Columns.Add(colId);
             _grid.Columns.Add(colName);
-            _grid.Columns.Add(colFolder);
-            int folderColIndex = colFolder.Index;
 
-            foreach (var (appid, folderPath) in unresolved)
+            if (unresolved.Count > 0)
             {
-                _unresolvedIds.Add(appid);
-                int i = _grid.Rows.Add(appid, "", "Open Folder");
-                var row = _grid.Rows[i];
-                row.Tag = folderPath;
-                row.DefaultCellStyle.ForeColor = Theme.Warning;
+                var colFolder = new DataGridViewButtonColumn
+                {
+                    HeaderText = "",
+                    UseColumnTextForButtonValue = false,
+                    FlatStyle = FlatStyle.Flat,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+                    Width = 100
+                };
+                colFolder.DefaultCellStyle.BackColor = Theme.Panel;
+                colFolder.DefaultCellStyle.ForeColor = Theme.Text;
+                colFolder.DefaultCellStyle.SelectionBackColor = Theme.Panel;
+                colFolder.DefaultCellStyle.SelectionForeColor = Theme.Text;
+                _grid.Columns.Add(colFolder);
+                int folderColIndex = colFolder.Index;
+
+                foreach (var (appid, folderPath) in unresolved)
+                {
+                    _unresolvedIds.Add(appid);
+                    int i = _grid.Rows.Add(appid, "", "Open Folder");
+                    var row = _grid.Rows[i];
+                    row.Tag = folderPath;
+                    row.DefaultCellStyle.ForeColor = Theme.Warning;
+                }
+
+                _grid.CellContentClick += (s, e) =>
+                {
+                    if (e.RowIndex < 0 || e.ColumnIndex != folderColIndex) return;
+                    if (_grid.Rows[e.RowIndex].Tag is string path) OpenFolder(path);
+                };
             }
-            foreach (var kv in _resolver.GetCachedNames())
-                _grid.Rows.Add(kv.Key, kv.Value, "");
 
-            _grid.CellContentClick += (s, e) =>
-            {
-                if (e.RowIndex < 0 || e.ColumnIndex != folderColIndex) return;
-                if (_grid.Rows[e.RowIndex].Tag is string path) OpenFolder(path);
-            };
+            foreach (var kv in _resolver.GetCachedNames())
+                _grid.Rows.Add(kv.Key, kv.Value);
 
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Theme.Panel };
             var footerEdge = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.PanelEdge };
