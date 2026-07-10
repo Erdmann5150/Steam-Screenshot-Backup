@@ -86,6 +86,32 @@ namespace SteamScreenshotBackup
             c.Disposed += (s, e) => Changed -= Apply;
         }
 
+        // DataGridView's scroll bars aren't part of its own window like a native
+        // ListView/TreeView's are \u2014 they're separate HScrollBar/VScrollBar child
+        // controls with their own handles, so ApplyScrollbars (which themes the
+        // control's own handle) never reaches them, leaving them stuck light-themed.
+        // Those child controls also come and go as rows are added/removed, so this
+        // reacts to ControlAdded as well as re-theming on every theme change.
+        public static void ApplyDataGridScrollbars(DataGridView grid)
+        {
+            void ApplyOne(Control sb)
+            {
+                void Do() { try { SetWindowTheme(sb.Handle, Dark ? "DarkMode_Explorer" : "Explorer", null); } catch { } }
+                if (sb.IsHandleCreated) Do();
+                else sb.HandleCreated += (s, e) => Do();
+            }
+            void ApplyAll()
+            {
+                if (grid.IsDisposed) return;
+                foreach (Control c in grid.Controls)
+                    if (c is ScrollBar) ApplyOne(c);
+            }
+            grid.ControlAdded += (s, e) => { if (e.Control is ScrollBar) ApplyOne(e.Control); };
+            ApplyAll();
+            Changed += ApplyAll;
+            grid.Disposed += (s, e) => Changed -= ApplyAll;
+        }
+
         // ListView (and a few other controls) don't expose DoubleBuffered publicly, so
         // owner-drawn rows repaint directly to screen and visibly flicker on every mouse
         // move over the list. Flip the protected property on instead.

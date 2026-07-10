@@ -71,6 +71,7 @@ namespace SteamScreenshotBackup
             _grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = Theme.Selection;
             _grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = Theme.Text;
             Theme.ApplyScrollbars(_grid);
+            Theme.ApplyDataGridScrollbars(_grid);
 
             var colId = new DataGridViewTextBoxColumn { HeaderText = "App ID", FillWeight = 30 };
             var colName = new DataGridViewTextBoxColumn { HeaderText = "Game Name", FillWeight = 70 };
