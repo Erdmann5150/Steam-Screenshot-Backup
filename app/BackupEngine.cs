@@ -337,7 +337,7 @@ namespace SteamScreenshotBackup
             t == ScreenshotType.Standard ? StandardFolder : HighResFolder;
 
         public static string TypeLabel(ScreenshotType t) =>
-            t == ScreenshotType.Standard ? "Standard" : "High resolution";
+            t == ScreenshotType.Standard ? "Standard" : "High Resolution";
 
         // 20260706210532_1.jpg / 646570_20260706210532_1.png -> "2026-07-06 21.05.32.ext"
         private static (DateTime Ts, string Name) ConvertName(string fileName, ScreenshotType type)

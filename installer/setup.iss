@@ -18,6 +18,10 @@
 AppId={{7E6B1F63-1B0A-4B62-9E1D-52A9C7C5B8D4}
 AppName={#AppName}
 AppVersion={#AppVersion}
+; Inno's own default AppVerName ("{#AppName} version {#AppVersion}") puts a
+; lowercase "version" mid-title; set it explicitly for a clean Title Case
+; wizard caption ("Setup - Steam Screenshot Backup 3.7.0").
+AppVerName={#AppName} {#AppVersion}
 AppPublisher=Erdmann5150
 AppPublisherURL=https://github.com/Erdmann5150/Steam-Screenshot-Backup
 AppSupportURL=https://github.com/Erdmann5150/Steam-Screenshot-Backup/issues
@@ -37,6 +41,9 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
+; "modern" wizard style defaults DisableWelcomePage to yes, silently
+; skipping the standard Welcome page. Force it back on.
+DisableWelcomePage=no
 
 [Messages]
 ; Drop the redundant instruction line on the tasks page for a cleaner flow.
@@ -81,7 +88,7 @@ Filename: "reg.exe"; Parameters: "delete ""HKCU\Software\Microsoft\Windows\Curre
 Type: filesandordirs; Name: "{localappdata}\SteamScreenshotBackup"
 
 [Code]
-// ----- theme for the wizard (matches the app; user picks light or dark) -----
+// ----- theme for the wizard (matches the app's dark palette) -----
 function DwmSetWindowAttribute(hwnd: HWND; attr: Integer; var value: Integer; size: Integer): Integer;
   external 'DwmSetWindowAttribute@dwmapi.dll stdcall';
 
@@ -95,7 +102,6 @@ const
   clLiteText  = $0032261A;   // RGB(26,38,50)
 
 var
-  ThemeToggle: TNewButton;
   IsDarkTheme: Boolean;
 
 procedure ApplyThemeTo(C: TControl; Dark: Boolean; Bg, Panel, Txt: TColor);
@@ -139,37 +145,9 @@ begin
   DwmSetWindowAttribute(WizardForm.Handle, 20, v, SizeOf(v));   // dark/light title bar
 end;
 
-// Caption reflects the mode the click will switch TO, so it reads as a call
-// to action ("Light Mode") rather than a status readout of the current one.
-procedure UpdateThemeToggleCaption;
-begin
-  if ThemeToggle = nil then exit;
-  if IsDarkTheme then ThemeToggle.Caption := 'Light Mode'
-  else ThemeToggle.Caption := 'Dark Mode';
-end;
-
-procedure ThemeToggleClick(Sender: TObject);
-begin
-  IsDarkTheme := not IsDarkTheme;
-  UpdateThemeToggleCaption;
-  ApplyTheme;
-end;
-
 procedure InitializeWizard;
 begin
-  IsDarkTheme := True;   // installer defaults to dark mode
-
-  // Subtle inline toggle on the Welcome page itself, instead of a blocking
-  // theme-choice page or popup - matches the app's own light/dark setting.
-  ThemeToggle := TNewButton.Create(WizardForm);
-  ThemeToggle.Parent := WizardForm.WelcomePage;
-  ThemeToggle.Width := 90;
-  ThemeToggle.Height := 23;
-  ThemeToggle.Left := WizardForm.WelcomePage.ClientWidth - ThemeToggle.Width;
-  ThemeToggle.Top := 0;
-  ThemeToggle.OnClick := @ThemeToggleClick;
-  UpdateThemeToggleCaption;
-
+  IsDarkTheme := True;   // installer defaults to dark mode, matching the app
   ApplyTheme;
 end;
 

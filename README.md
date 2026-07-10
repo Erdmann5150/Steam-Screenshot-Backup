@@ -33,17 +33,17 @@ Steam Screenshots/
 
 ![The Utilities menu's targeted deletion window: a checkbox tree by backup type, game, and file](docs/img/targeted-delete.png)
 
-*Utilities → Delete specific files/folders — pick exactly which backup files to remove.*
+*Utilities → Granular Deletion — pick exactly which backup files to remove.*
 
 <details>
 <summary>More screenshots (Settings, Game Names, tray menu, installer, preview)</summary>
 
 <p align="center">
   <img src="docs/img/settings-general.png" alt="Settings window, General tab" width="49%">
-  <img src="docs/img/settings-backup.png" alt="Settings window, Backup configuration tab" width="49%">
+  <img src="docs/img/settings-backup.png" alt="Settings window, Backup Configuration tab" width="49%">
 </p>
 
-*Settings — General (left) and Backup configuration (right).*
+*Settings — General (left) and Backup Configuration (right). Apply saves without closing the window; Close just closes it.*
 
 <p align="center">
   <img src="docs/img/tray-menu.png" alt="Right-click tray menu" width="34%">
@@ -149,12 +149,14 @@ Uninstall option cleans up after itself.
 - **Re-Sync** reviews everything in Steam that's missing from your backup,
   grouped by game, so you can restore just what you pick.
 - **Settings** has two tabs: *General* (theme, notifications, startup, the
-  Markdown index) and *Backup configuration* (folder, screenshot types,
-  layout, and the danger zone).
+  Markdown index) and *Backup Configuration* (folder, screenshot types,
+  layout, and the danger zone). **Apply** saves in the background without
+  closing the window, so you can keep adjusting settings; **Close** just
+  closes it.
 - **Game Names** fixes delisted or non-Steam games by hand, or opens the
   tracking file directly.
-- **Utilities** has one-click bulk cleanup and a window for picking exactly
-  which files to delete.
+- **Utilities** has one-click bulk cleanup and **Granular Deletion**, a
+  checkbox tree for picking exactly which backup files to remove.
 
 ### High-resolution screenshots
 
