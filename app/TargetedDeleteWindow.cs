@@ -52,10 +52,12 @@ namespace SteamScreenshotBackup
                 ForeColor = Theme.Text,
                 BorderStyle = BorderStyle.None,
                 HideSelection = true,
-                ShowLines = true,
-                ItemHeight = 22
+                ShowLines = false,
+                ItemHeight = 22,
+                DrawMode = TreeViewDrawMode.OwnerDrawAll
             };
             _tree.AfterCheck += OnAfterCheck;
+            _tree.DrawNode += OnDrawNode;
             Theme.ApplyScrollbars(_tree);
 
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Theme.Panel };
@@ -140,6 +142,47 @@ namespace SteamScreenshotBackup
             UpdateSummary();
         }
 
+        // TreeNode.BackColor only paints behind the text label by default, so a
+        // game/type row's highlight looked like a narrow strip instead of a full row.
+        // .NET's TreeView also drops its native checkbox/glyph drawing entirely once any
+        // owner-draw mode is turned on, so full ownership means painting the checkbox and
+        // expand glyph by hand too \u2014 hit-testing for both stays native either way.
+        private void OnDrawNode(object sender, DrawTreeNodeEventArgs e)
+        {
+            bool selected = (e.State & TreeNodeStates.Selected) != 0 && _tree.Focused;
+            Color bg = selected
+                ? Theme.Selection
+                : (e.Node.BackColor == Color.Empty ? Theme.Background : e.Node.BackColor);
+            using (var b = new SolidBrush(bg))
+                e.Graphics.FillRectangle(b, new Rectangle(0, e.Bounds.Top, _tree.ClientSize.Width, e.Bounds.Height));
+
+            // OwnerDrawAll hands us a Bounds that ignores indentation, so the whole row
+            // \u2014 glyph, checkbox, and label \u2014 is laid out here by hand, one level's
+            // worth of indent at a time.
+            int x = 6 + e.Node.Level * _tree.Indent;
+
+            if (e.Node.Nodes.Count > 0)
+            {
+                var glyphRect = new Rectangle(x, e.Bounds.Top, 16, e.Bounds.Height);
+                TextRenderer.DrawText(e.Graphics, e.Node.IsExpanded ? "\u25BC" : "\u25B6", Theme.SmallFont,
+                    glyphRect, Theme.TextDim, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
+            x += 16;
+
+            var cbState = e.Node.Checked
+                ? System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal
+                : System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal;
+            var cbSize = CheckBoxRenderer.GetGlyphSize(e.Graphics, cbState);
+            var cbLoc = new Point(x, e.Bounds.Top + (e.Bounds.Height - cbSize.Height) / 2);
+            CheckBoxRenderer.DrawCheckBox(e.Graphics, cbLoc, cbState);
+            x += cbSize.Width + 6;
+
+            Color fg = e.Node.ForeColor == Color.Empty ? Theme.Text : e.Node.ForeColor;
+            var textRect = new Rectangle(x, e.Bounds.Top, Math.Max(0, _tree.ClientSize.Width - x), e.Bounds.Height);
+            TextRenderer.DrawText(e.Graphics, e.Node.Text, e.Node.NodeFont ?? Font, textRect, fg,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+        }
+
         // ------------------------------------------------------------- checking
 
         private void OnAfterCheck(object sender, TreeViewEventArgs e)
@@ -148,6 +191,7 @@ namespace SteamScreenshotBackup
             if (e.Action == TreeViewAction.Unknown) return;   // programmatic change
             _cascading = true;
             CheckAllChildren(e.Node, e.Node.Checked);
+            SyncAncestors(e.Node.Parent);
             _cascading = false;
             UpdateSummary();
         }
@@ -158,6 +202,18 @@ namespace SteamScreenshotBackup
             {
                 child.Checked = value;
                 CheckAllChildren(child, value);
+            }
+        }
+
+        // A parent node's checkbox should mirror its children: fully checked once every
+        // child is, and cleared as soon as one isn't \u2014 otherwise checking/unchecking
+        // individual files leaves the game/type row's box out of sync with reality.
+        private static void SyncAncestors(TreeNode node)
+        {
+            while (node != null)
+            {
+                node.Checked = node.Nodes.Count > 0 && AllChecked(node);
+                node = node.Parent;
             }
         }
 
