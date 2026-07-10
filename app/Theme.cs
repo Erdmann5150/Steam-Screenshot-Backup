@@ -86,6 +86,26 @@ namespace SteamScreenshotBackup
             c.Disposed += (s, e) => Changed -= Apply;
         }
 
+        // A DropDownList-style ComboBox's closed display area ignores BackColor/ForeColor
+        // entirely (comctl32 theme-draws it) - SetWindowTheme's "DarkMode_*" pseudo-themes
+        // don't reliably take effect without the rest of the undocumented dark-mode API set,
+        // so the only robust fix is to own the painting: OwnerDrawFixed covers the closed
+        // display and every dropdown row: FlatStyle.Flat still supplies the border/arrow.
+        public static void StyleComboBox(ComboBox c)
+        {
+            c.DrawMode = DrawMode.OwnerDrawFixed;
+            c.DrawItem += (s, e) =>
+            {
+                if (e.Index < 0) return;
+                bool selected = (e.State & DrawItemState.Selected) != 0;
+                Color bg = selected ? Selection : (c.BackColor);
+                using (var b = new SolidBrush(bg)) e.Graphics.FillRectangle(b, e.Bounds);
+                var r = new Rectangle(e.Bounds.X + 6, e.Bounds.Y, e.Bounds.Width - 6, e.Bounds.Height);
+                TextRenderer.DrawText(e.Graphics, c.Items[e.Index].ToString(), c.Font, r, Text,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            };
+        }
+
         // DataGridView's scroll bars aren't part of its own window like a native
         // ListView/TreeView's are \u2014 they're separate HScrollBar/VScrollBar child
         // controls with their own handles, so ApplyScrollbars (which themes the
@@ -231,6 +251,35 @@ namespace SteamScreenshotBackup
         {
             using var bmp = DrawCamera(32);
             return Icon.FromHandle(bmp.GetHicon());
+        }
+    }
+
+    // A Details-view ListView themed via Theme.ApplyScrollbars (SetWindowTheme
+    // "Explorer"/"DarkMode_Explorer") keeps drawing the native header's column
+    // divider lines all the way down through the empty space below the last
+    // row, the same guide lines Explorer itself shows in an under-full file
+    // list. Owner-draw notifications only cover items/subitems, not that empty
+    // tail, so the only way to erase them is to paint over that area ourselves
+    // right after the native control finishes its own WM_PAINT.
+    internal sealed class FlatListView : ListView
+    {
+        private const int WM_PAINT = 0x000F;
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg == WM_PAINT) PaintOverEmptyArea();
+        }
+
+        private void PaintOverEmptyArea()
+        {
+            if (!IsHandleCreated || View != View.Details || Items.Count == 0) return;
+            int top = Items[Items.Count - 1].Bounds.Bottom;
+            int height = ClientSize.Height - top;
+            if (height <= 0) return;
+            using var g = Graphics.FromHwnd(Handle);
+            using var b = new SolidBrush(Theme.Background);
+            g.FillRectangle(b, 0, top, ClientSize.Width, height);
         }
     }
 }
