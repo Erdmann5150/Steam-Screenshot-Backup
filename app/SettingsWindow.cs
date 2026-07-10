@@ -2,7 +2,6 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace SteamScreenshotBackup
@@ -539,7 +538,8 @@ namespace SteamScreenshotBackup
                         if (applyTemplate)
                         {
                             var engine = _app.Engine;
-                            Task.Run(() => engine.ReorganizeLayout(oldTemplate, newTemplate));
+                            ProgressWindow.Run(this, "Reorganizing Backup\u2026", "Moving files into the new folder layout\u2026",
+                                progress => engine.ReorganizeLayout(oldTemplate, newTemplate));
                         }
                     }
                 }
