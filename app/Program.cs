@@ -16,6 +16,16 @@ namespace SteamScreenshotBackup
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            // Last-resort safety net: log anything that would otherwise crash the app
+            // silently (or with just the default .NET error dialog) with no record of
+            // why. Individual methods already catch what they can; this is the catch-all
+            // for whatever slips through, on the UI thread or a background one.
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += (s, e) =>
+                Logger.Error("Unhandled UI exception: " + e.Exception);
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+                Logger.Error("Unhandled exception (fatal=" + e.IsTerminating + "): " + e.ExceptionObject);
+
             // The installer launches with --show so the main window opens after setup,
             // instead of the app slipping silently into the tray.
             bool showUi = args.Any(a => string.Equals(a, "--show", StringComparison.OrdinalIgnoreCase));

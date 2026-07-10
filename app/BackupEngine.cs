@@ -351,7 +351,7 @@ namespace SteamScreenshotBackup
             t == ScreenshotType.Standard ? "Standard" : "High Resolution";
 
         // 20260706210532_1.jpg / 646570_20260706210532_1.png -> "2026-07-06 21.05.32.ext"
-        private static (DateTime Ts, string Name) ConvertName(string fileName, ScreenshotType type)
+        internal static (DateTime Ts, string Name) ConvertName(string fileName, ScreenshotType type)
         {
             Match m = type == ScreenshotType.Standard
                 ? StdName.Match(fileName) : HighResSrcName.Match(fileName);
@@ -369,9 +369,11 @@ namespace SteamScreenshotBackup
         }
 
         // {game}\{yyyy} etc. Each expanded segment is kept file-system safe.
-        private string ExpandTemplate(string game, DateTime ts)
+        private string ExpandTemplate(string game, DateTime ts) => ExpandTemplate(_settings.FolderTemplate, game, ts);
+
+        internal static string ExpandTemplate(string template, string game, DateTime ts)
         {
-            string t = string.IsNullOrWhiteSpace(_settings.FolderTemplate) ? "{game}" : _settings.FolderTemplate;
+            string t = string.IsNullOrWhiteSpace(template) ? "{game}" : template;
             string expanded = t
                 .Replace("{game}", game)
                 .Replace("{yyyy}", ts.ToString("yyyy"))
@@ -488,7 +490,7 @@ namespace SteamScreenshotBackup
         private static readonly Regex FallbackAppIdRx =
             new Regex(@"^(?:AppID_|Non-Steam App )(\d+)$", RegexOptions.Compiled);
 
-        private static string ExtractFallbackAppId(string folderName)
+        internal static string ExtractFallbackAppId(string folderName)
         {
             var m = FallbackAppIdRx.Match(folderName);
             return m.Success ? m.Groups[1].Value : null;
@@ -1289,7 +1291,7 @@ namespace SteamScreenshotBackup
             }
         }
 
-        private static string ExtractGameSegment(string rel, string template)
+        internal static string ExtractGameSegment(string rel, string template)
         {
             var segments = rel.Split('\\', '/');
             var tSegments = (string.IsNullOrWhiteSpace(template) ? "{game}" : template).Split('\\', '/');
