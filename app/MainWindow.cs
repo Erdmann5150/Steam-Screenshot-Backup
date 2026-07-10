@@ -142,7 +142,7 @@ namespace SteamScreenshotBackup
             };
             _bottom.Controls.Add(hint);
 
-            var close = MakeButton("Close", 96, primary: true);
+            var close = MakeButton("Close", 96);
             close.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             close.Location = new Point(_bottom.Width - close.Width - 14, 12);
             close.Click += (s, e) => Close();
