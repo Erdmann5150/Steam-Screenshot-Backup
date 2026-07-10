@@ -22,6 +22,11 @@ namespace SteamScreenshotBackup
         private readonly ToolStripMenuItem _autoStartItem;
         private readonly ContextMenuStrip _menu;
         private BackupEngine _engine;
+#if !OFFLINE_ONLY
+        // Fully-qualified to avoid ambiguity with System.Windows.Forms.Timer, which
+        // is also in scope in this file.
+        private System.Threading.Timer _updateCheckTimer;
+#endif
 
         public BackupEngine Engine => _engine;
         public Settings SettingsObj => _settings;
@@ -55,6 +60,9 @@ namespace SteamScreenshotBackup
             _menu.Items.Add(_autoStartItem);
 
             _menu.Items.Add("Settings", null, (s, e) => ShowSettings(null));
+#if !OFFLINE_ONLY
+            _menu.Items.Add("Check for Updates Now", null, (s, e) => CheckForUpdatesNow());
+#endif
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add("Uninstall", null, (s, e) => Uninstall());
             _menu.Items.Add("Exit", null, (s, e) => ExitApp());
@@ -110,6 +118,13 @@ namespace SteamScreenshotBackup
                     _settings.MetadataBackfilled = true;
                     _settings.Save();
                 });
+
+#if !OFFLINE_ONLY
+            // Small delay so this never competes with the startup catch-up scan above;
+            // then once a day, same cadence as AppNameResolver's background re-verification.
+            _updateCheckTimer = new System.Threading.Timer(
+                _ => AutoCheckForUpdates(), null, TimeSpan.FromMinutes(2), TimeSpan.FromHours(24));
+#endif
         }
 
         // Central gate for tray popups so the "show notifications" setting is honored.
@@ -144,6 +159,8 @@ namespace SteamScreenshotBackup
                     _settings.PreviewBeforeImport = true;
                 if (k?.GetValue("OfflineModeDefault") is int o && o == 1)
                     _settings.OfflineMode = true;
+                if (k?.GetValue("UpdateCheckOffDefault") is int u && u == 1)
+                    _settings.CheckForUpdates = false;
             }
             catch { }
 
@@ -200,6 +217,59 @@ namespace SteamScreenshotBackup
                 RunScan(RunKind.DestinationChanged);
             }
         }
+
+#if !OFFLINE_ONLY
+        // ----------------------------------------------------------- update checks
+
+        // User-initiated, from the tray menu or the Utilities menu: always gives
+        // visible feedback, even when there's nothing new.
+        public void CheckForUpdatesNow()
+        {
+            if (_settings.OfflineMode)
+            {
+                MessageDialog.Info(
+                    "Offline Mode is on, so update checks are disabled.\n\n" +
+                    "Turn it off in Settings \u2192 Privacy to check for updates.");
+                return;
+            }
+
+            Task.Run(() =>
+            {
+                var info = UpdateChecker.CheckNow(_settings);
+                OnUi(() =>
+                {
+                    if (info == null)
+                    {
+                        MessageDialog.Info($"You're running the latest version ({UpdateChecker.CurrentVersion}).");
+                        return;
+                    }
+                    if (MessageDialog.Confirm(
+                            $"Version {info.Version} is available \u2014 you have {UpdateChecker.CurrentVersion}.",
+                            "Update Available", "View Release", "Later"))
+                        Process.Start(new ProcessStartInfo { FileName = info.Url, UseShellExecute = true });
+                });
+            });
+        }
+
+        // Timer-driven background check: silent unless there's actually something
+        // new, and only notifies once per version so it doesn't nag on every pass.
+        private void AutoCheckForUpdates()
+        {
+            if (!_settings.CheckForUpdates || _settings.OfflineMode) return;
+
+            var info = UpdateChecker.CheckNow(_settings);
+            if (info == null) return;
+            if (string.Equals(_settings.LastNotifiedUpdateVersion, info.Version, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _settings.LastNotifiedUpdateVersion = info.Version;
+            _settings.Save();
+            Logger.Log($"Update available: version {info.Version} (currently running {UpdateChecker.CurrentVersion}).");
+            Notify(6000,
+                $"Version {info.Version} is available \u2014 use \"Check for Updates Now\" to view it.",
+                ToolTipIcon.Info);
+        }
+#endif
 
         // ----------------------------------------------------------- scan runs
 
@@ -384,6 +454,9 @@ namespace SteamScreenshotBackup
         private void ExitApp()
         {
             _tray.Visible = false;
+#if !OFFLINE_ONLY
+            _updateCheckTimer?.Dispose();
+#endif
             _engine?.Dispose();
             ExitThread();
         }

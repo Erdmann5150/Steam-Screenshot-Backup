@@ -16,6 +16,11 @@ namespace SteamScreenshotBackup
         public static bool AskYesNo(string text, string title = "Steam Screenshot Backup")
             => Show(text, title, Theme.Accent, "Yes", "No") == DialogResult.OK;
 
+        // Same two-button dialog as AskYesNo, with custom button text (e.g. an
+        // "Update Available" prompt offering "View Release" / "Later").
+        public static bool Confirm(string text, string title, string okText, string cancelText)
+            => Show(text, title, Theme.Accent, okText, cancelText) == DialogResult.OK;
+
         // Mandatory second-look confirmation before any deletion (bulk or targeted):
         // always states exactly how many files and how much data are about to be sent
         // to the Recycle Bin. Returns false (with an info dialog, not a confirmation)

@@ -56,6 +56,15 @@ namespace SteamScreenshotBackup
         // (a NAS being unreachable) - see AppNameResolver for what this gates.
         public bool OfflineMode { get; set; } = false;
 
+        // Automatically check GitHub for a newer release once a day. A read-only
+        // HTTPS call to the public releases API, nothing else - skipped when
+        // OfflineMode is on, unavailable at all in the offline-only build.
+        public bool CheckForUpdates { get; set; } = true;
+
+        // The newest version already shown in an update notification, so the same
+        // release doesn't renotify on every daily check.
+        public string LastNotifiedUpdateVersion { get; set; }
+
         public static string Dir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SteamScreenshotBackup");

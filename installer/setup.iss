@@ -1,10 +1,10 @@
 ; Inno Setup script for Steam Screenshot Backup.
 ; Build with build.ps1 at the repository root (it publishes the exe first and
 ; passes the version in), or manually:
-;   ISCC.exe setup.iss /DAppVersion=3.10.0 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
+;   ISCC.exe setup.iss /DAppVersion=3.11.0 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
 
 #ifndef AppVersion
-  #define AppVersion "3.10.0"
+  #define AppVersion "3.11.0"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\app\bin\Release\net8.0-windows\win-x64\publish"
@@ -57,6 +57,7 @@ Name: "nonotifications"; Description: "Turn off popup notifications"; Flags: unc
 Name: "previewimport"; Description: "Preview a list of changes before importing batches of screenshots"; Flags: unchecked
 Name: "deleteoriginals"; Description: "Delete original Steam screenshots after import (dangerous, sends them to the Recycle Bin)"; Flags: unchecked
 Name: "offlinemode"; Description: "Offline mode: never contact Steam's servers for game names"; Flags: unchecked
+Name: "noupdatecheck"; Description: "Turn off automatic update checks"; Flags: unchecked
 
 [Files]
 Source: "{#PublishDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -74,6 +75,7 @@ Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueNam
 Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "NotificationsOffDefault"; ValueData: 1; Tasks: nonotifications; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "PreviewImportsDefault"; ValueData: 1; Tasks: previewimport; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "OfflineModeDefault"; ValueData: 1; Tasks: offlinemode; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\SteamScreenshotBackup"; ValueType: dword; ValueName: "UpdateCheckOffDefault"; ValueData: 1; Tasks: noupdatecheck; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [Run]
 ; --show opens the main window after install instead of only landing in the tray.

@@ -102,6 +102,11 @@ Steam Screenshots/
 - **Offline mode.** Skip Steam's store lookups entirely (a Settings toggle or
   an installer checkbox), or download the dedicated offline-only portable
   build with that code removed completely.
+- **Update checks.** Optionally checks this project's GitHub releases once a
+  day and lets you know if a newer version is out (a Settings toggle or an
+  installer checkbox to turn it off), plus a manual **Check for Updates Now**
+  button in the tray menu and Utilities. Off automatically in Offline mode,
+  and not present at all in the offline-only portable build.
 - **Dark and light themes**, or follow the Windows setting.
 - **Statistics**: total games, screenshots, and data, plus per-session counters.
 
@@ -115,9 +120,10 @@ Steam Screenshots/
    [latest release](../../releases/latest).
 2. Run it. Pick an install folder (defaults to Program Files) and choose whether
    to start with Windows, add Start Menu / Desktop shortcuts, turn off popup
-   notifications, enable offline mode, preview batches before importing, and
-   (optionally, and flagged as dangerous) delete originals after import. The
-   main window opens automatically when setup finishes.
+   notifications, enable offline mode, turn off automatic update checks,
+   preview batches before importing, and (optionally, and flagged as
+   dangerous) delete originals after import. The main window opens
+   automatically when setup finishes.
 3. On first launch, choose your backup folder and which screenshot types to back
    up. That's the entire setup.
 
@@ -268,12 +274,16 @@ delete from them if you turn that on. Specifics:
   resolve an app ID into a game name - made only when the name isn't already
   known locally (installed-game manifests, the existing cache), and
   periodically re-checked in the background for names already resolved this
-  way. Only the app ID is sent, never screenshot data, filenames, or anything
-  else; there's no telemetry and no account of any kind. Turn on **Offline
-  mode** (Settings → General, or an installer checkbox) to skip these lookups
-  entirely - unresolved games just get an `AppID_<id>` folder name instead,
-  or download the dedicated offline-only portable build with that code
-  removed completely.
+  way - plus an optional once-a-day check against this project's GitHub
+  releases to let you know about a newer version. Only the app ID (for the
+  Steam lookup) or nothing at all (for the update check) is sent, never
+  screenshot data, filenames, or anything else; there's no telemetry and no
+  account of any kind. Turn on **Offline mode** (Settings → General, or an
+  installer checkbox) to skip both entirely - unresolved games just get an
+  `AppID_<id>` folder name instead, and update checks stop - or download the
+  dedicated offline-only portable build with that code removed completely.
+  The update check alone can also be turned off on its own (Settings →
+  General, or an installer checkbox) without affecting Steam name lookups.
 - The source is all here, so anything about how it handles your files can be
   checked directly instead of taken on faith.
 
@@ -299,12 +309,15 @@ scan clean on VirusTotal:
 
 **Does this upload my screenshots anywhere? Does it phone home?** No screenshot
 data, ever - see [What it does with your files](#what-it-does-with-your-files).
-The app does automatically make read-only network calls to the Steam store to
-resolve an app ID into a game name (only when it can't be found locally, plus
-a periodic background re-check of names resolved this way) - only the numeric
-app ID is sent, nothing else. Turn on **Offline mode** in Settings (or during
-install) to disable these lookups entirely, or use the offline-only portable
-build, which has that code removed at compile time. No telemetry, no account,
+The app does automatically make two kinds of read-only network calls: Steam
+store lookups to resolve an app ID into a game name (only when it can't be
+found locally, plus a periodic background re-check of names resolved this
+way - only the numeric app ID is sent, nothing else), and an optional
+once-a-day check against this project's GitHub releases for a newer version
+(no data sent at all). Turn on **Offline mode** in Settings (or during
+install) to disable both entirely, turn off just the update check on its own
+(also in Settings, or during install), or use the offline-only portable
+build, which has all of it removed at compile time. No telemetry, no account,
 no analytics of any kind.
 
 **Can it delete my screenshots?** Only if you turn on *Delete originals after

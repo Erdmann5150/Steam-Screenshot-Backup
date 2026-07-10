@@ -28,6 +28,9 @@ namespace SteamScreenshotBackup
         private readonly TextBox _highResFolder;
         private readonly CheckBox _standard, _highRes, _autoStart, _autoRestore, _deleteOriginals,
                                   _showNotifications, _markdownIndex, _previewImport, _offlineMode;
+#if !OFFLINE_ONLY
+        private readonly CheckBox _checkForUpdates;
+#endif
         private readonly ComboBox _layout, _theme;
         private bool _suppressDangerPrompt;   // guards the enable-confirmation loop
 
@@ -197,6 +200,17 @@ namespace SteamScreenshotBackup
 #if OFFLINE_ONLY
             _offlineMode.Checked = true;
             _offlineMode.Enabled = false;
+#endif
+
+#if !OFFLINE_ONLY
+            Section("UPDATES");
+            _checkForUpdates = new CheckBox();
+            Check(_checkForUpdates, "Automatically check for new versions once a day",
+                _settings.CheckForUpdates, Theme.Text);
+            y += 26;
+            Hint("A read-only check against this project's GitHub releases page \u2014 no data\n" +
+                 "about you or your files is sent, just a request for the latest version number.");
+            y += 44;
 #endif
             int generalBottom = y;
 
@@ -496,6 +510,9 @@ namespace SteamScreenshotBackup
             bool oldPreviewImport = _settings.PreviewBeforeImport;
             bool oldDeleteOriginals = _settings.DeleteOriginals;
             bool oldOfflineMode = _settings.OfflineMode;
+#if !OFFLINE_ONLY
+            bool oldCheckForUpdates = _settings.CheckForUpdates;
+#endif
             ThemeMode oldTheme = _settings.Theme;
             bool oldAutoStart = _app.IsAutoStartEnabled;
 
@@ -509,6 +526,9 @@ namespace SteamScreenshotBackup
             _settings.GenerateMarkdownIndex = _markdownIndex.Checked;
             _settings.PreviewBeforeImport = _previewImport.Checked;
             _settings.OfflineMode = _offlineMode.Checked;
+#if !OFFLINE_ONLY
+            _settings.CheckForUpdates = _checkForUpdates.Checked;
+#endif
             bool deleteOriginalsNewlyEnabled = _deleteOriginals.Checked && !_settings.DeleteOriginals;
             _settings.DeleteOriginals = _deleteOriginals.Checked;
             _settings.Theme = _theme.SelectedIndex switch
@@ -585,6 +605,9 @@ namespace SteamScreenshotBackup
             LogSettingChange("Preview Before Import", oldPreviewImport, _settings.PreviewBeforeImport);
             LogSettingChange("Delete Originals", oldDeleteOriginals, _settings.DeleteOriginals);
             LogSettingChange("Offline Mode", oldOfflineMode, _settings.OfflineMode);
+#if !OFFLINE_ONLY
+            LogSettingChange("Check For Updates", oldCheckForUpdates, _settings.CheckForUpdates);
+#endif
             LogSettingChange("Theme", oldTheme, _settings.Theme);
             LogSettingChange("Start With Windows", oldAutoStart, _autoStart.Checked);
 

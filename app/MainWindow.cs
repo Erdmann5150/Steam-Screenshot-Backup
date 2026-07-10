@@ -275,6 +275,10 @@ namespace SteamScreenshotBackup
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Granular Deletion", null,
                 (s, e) => TargetedDeleteWindow.ShowWindow(_app.Engine, this));
+#if !OFFLINE_ONLY
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Check for Updates Now", null, (s, e) => _app.CheckForUpdatesNow());
+#endif
             menu.Show(anchor, new Point(0, anchor.Height));
         }
 
