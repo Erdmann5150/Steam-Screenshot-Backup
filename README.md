@@ -288,14 +288,14 @@ comfortable, or build from source (above) if you'd rather not.
 recurring expense for a free hobby project. The source is public if you want
 to verify or build it yourself instead of trusting the download.
 
-**Is it actually safe? Antivirus/VirusTotal?** The installer scans
-[0/68 clean on VirusTotal](https://www.virustotal.com/gui/file/98629ed9845ec70582241cf1961d6d184333a81cc98e6dd6f48282e29bc58b1b/summary).
-The portable exe scans
-[1/66](https://www.virustotal.com/gui/file/29c40ad0b9adb049da94158e7bd40127985fc997e188c01f4ca60ffc3dcf227e/summary) -
-a generic heuristic from Zillya, a low-reputation engine with a known
-high false-positive rate on unsigned .NET single-file builds. Every major
-engine (Defender, ESET, BitDefender, Malwarebytes, Kaspersky, etc.) is clean
-on both.
+**Is it actually safe? Antivirus/VirusTotal?** All three v3.10.0 downloads
+scan clean on VirusTotal:
+[installer](https://www.virustotal.com/gui/file/513c32bf085fd04a383514998cd8c4c7ba013b74266c04bcb805cb43c57823d4/summary)
+(0/67),
+[portable](https://www.virustotal.com/gui/file/d399f4d867fac2966f7a59e679e642f4706ee912dddbe9ff0bfef756e14fe83a/summary)
+(0/65), and
+[offline portable](https://www.virustotal.com/gui/file/6d013052d5832f286d4a30381c50cb317a8bace61f4651958d613d50d5600460/summary)
+(0/67).
 
 **Does this upload my screenshots anywhere? Does it phone home?** No screenshot
 data, ever - see [What it does with your files](#what-it-does-with-your-files).
