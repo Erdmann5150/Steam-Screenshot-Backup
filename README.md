@@ -1,16 +1,11 @@
 # Steam Screenshot Backup
 
-Automatically consolidates every Steam screenshot — including the high-resolution
-external copies — into one organized, searchable backup with **real game names**
-and filenames you can actually read. It began as a way to rescue the screenshots
-Steam locks away in appid-numbered folders — especially older ones taken before
-Steam's "save an external copy" option existed — and grew to also organize the
-high-resolution external copies that Steam otherwise dumps, unsorted, into a
-single folder. Both stores are now watched and backed up continuously.
-
-Steam buries screenshots in `userdata\<id>\760\remote\<appid>\screenshots` under
-names like `20260706210532_1.jpg`, and it doesn't organize the uncompressed
-"external copy" files either. This project turns all of that into:
+Steam stores screenshots in `userdata\<id>\760\remote\<appid>\screenshots` under
+names like `20260706210532_1.jpg`, grouped by numeric app ID instead of game
+name. The uncompressed "external copy" files (from Steam's *"Save an external
+copy of my screenshots"* option) are similarly left ungrouped in a single
+folder. This app watches both locations continuously and copies everything
+into one folder tree, organized by real game name and readable timestamp:
 
 ```
 Steam Screenshots/
@@ -68,8 +63,8 @@ Steam Screenshots/
   non-Steam games (which you can also rename by hand).
 - **Both screenshot types** — Steam's compressed "Standard" copies and the
   uncompressed "High Resolution" external copies, both fully supported.
-- **Real-time backup** — every screenshot is copied within about a second of Steam
-  saving it, plus a catch-up scan at launch for anything taken while it was off.
+- **Real-time backup** — each screenshot is copied shortly after Steam finishes
+  writing it, plus a catch-up scan at launch for anything taken while it was off.
 - **Self-healing backup** — delete a file from the backup and it's restored
   automatically, or review and restore just what you want with **Re-Sync**.
 - **Searchable metadata** — the game name is embedded in each backup file, so
@@ -96,8 +91,8 @@ Steam Screenshots/
 - **Optional Steam cleanup** — turn on the (clearly-marked, dangerous) *Delete
   originals after import* setting and each original is removed from Steam once
   it's safely backed up, recoverable from the Recycle Bin.
-- **Network-drive friendly** — if the destination drops, the app quietly queues
-  work and resumes when it returns.
+- **Network-drive friendly** — if the destination becomes unreachable, the app
+  waits and retries automatically, then catches up once it's back.
 - **Dark and light themes** — or follow the Windows setting.
 - **Statistics** — total games, screenshots, and data, plus per-session counters.
 
@@ -206,10 +201,11 @@ the app under **Game Names**, or add entries to
 
 ## Resource usage and performance
 
-Designed to be invisible day-to-day: idle cost is near zero (native file-system
-watching, not polling), copies preserve timestamps without re-encoding, game
-names are cached forever, logs are size-capped, and a dropped network
-destination is queued and retried quietly instead of erroring.
+Idle cost is near zero (native file-system watching, not polling), copies
+preserve timestamps without re-encoding, game names are cached and only
+re-checked against Steam's store in small background batches once a day,
+logs are size-capped, and a dropped network destination is retried quietly
+instead of erroring.
 
 ## Building from source
 
@@ -237,26 +233,23 @@ build.ps1                     One-command release build
 - High-resolution backups require Steam's *"Save an external copy"* option to be
   enabled; Steam does not create uncompressed copies retroactively.
 
-## Transparency
+## What it does with your files
 
-This tool watches your Steam folders and copies — and, if you opt in, deletes —
-your personal screenshots. Because it touches your own files, **a core goal of the
-project is to be completely transparent about what it does behind the scenes.**
+This app reads from and writes to your Steam screenshot folders, and can
+delete from them if you turn that on. Specifics:
 
-- Everything it does is visible: the main window's activity feed and the on-disk
-  `app.log` record every backup, restore, deletion, warning, and error as it happens.
-- It is **non-destructive by default.** Steam's own files are never modified or
-  removed unless you explicitly enable the dangerous *Delete originals after import*
-  option — and even then, deletions go to the **Windows Recycle Bin**, never a
-  permanent wipe.
-- Deleting backups — whether from turning a screenshot type off, the Utilities
-  menu's bulk actions, or the targeted deletion window — always goes to the
-  Recycle Bin, and always shows the exact file count and total size before you
-  confirm.
-- No telemetry, no accounts, no network calls except optional Steam store lookups
-  to resolve game names (cached locally, one lookup per game, ever).
-- The full source is here. Nothing about how your files are handled is hidden — if
-  the code and the documentation ever disagree, that's a bug worth reporting.
+- Every backup, restore, deletion, warning, and error is logged in the main
+  window's activity feed and in `app.log` on disk.
+- Steam's own files are never modified or removed unless you explicitly enable
+  *Delete originals after import*, which is off by default. Even then,
+  deletions go to the Windows Recycle Bin, not a permanent delete.
+- Any deletion of backup files — turning a screenshot type off, the Utilities
+  menu's bulk actions, or the Granular Deletion window — goes to the Recycle
+  Bin and shows the file count and total size before you confirm.
+- The only network calls are optional Steam store lookups to resolve game
+  names; there's no telemetry and no account of any kind.
+- The source is all here, so anything about how it handles your files can be
+  checked directly instead of taken on faith.
 
 ## Disclaimer
 
