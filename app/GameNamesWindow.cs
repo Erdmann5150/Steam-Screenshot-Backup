@@ -14,10 +14,12 @@ namespace SteamScreenshotBackup
     {
         private readonly AppNameResolver _resolver;
         private readonly DataGridView _grid;
+        private readonly HashSet<string> _unresolvedIds = new HashSet<string>();
 
-        public GameNamesWindow(AppNameResolver resolver)
+        public GameNamesWindow(BackupEngine engine)
         {
-            _resolver = resolver;
+            _resolver = engine.Resolver;
+            var unresolved = engine.FindUnresolvedGameFolders();
 
             Text = "Game Names \u2014 Steam Screenshot Backup";
             StartPosition = FormStartPosition.CenterParent;
@@ -28,12 +30,16 @@ namespace SteamScreenshotBackup
 
             var intro = new Label
             {
-                Text = "Fix names for delisted or non-Steam games. Installed games are named\n" +
-                       "straight from Steam and do not need entries here.",
+                Text = unresolved.Count == 0
+                    ? "Fix names for delisted or non-Steam games. Installed games are named\n" +
+                      "straight from Steam and do not need entries here."
+                    : $"{unresolved.Count} game folder{(unresolved.Count == 1 ? "" : "s")} could not be " +
+                      "named automatically (highlighted below). Click \"Open Folder\" to view its\n" +
+                      "screenshots, then type the game's name.",
                 Dock = DockStyle.Top,
                 Height = 48,
                 Padding = new Padding(14, 8, 14, 0),
-                ForeColor = Theme.TextDim,
+                ForeColor = unresolved.Count == 0 ? Theme.TextDim : Theme.Warning,
                 BackColor = Theme.Panel,
                 Font = Theme.SmallFont
             };
@@ -66,13 +72,41 @@ namespace SteamScreenshotBackup
             _grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = Theme.Text;
             Theme.ApplyScrollbars(_grid);
 
-            var colId = new DataGridViewTextBoxColumn { HeaderText = "App ID", FillWeight = 30 };
-            var colName = new DataGridViewTextBoxColumn { HeaderText = "Game Name", FillWeight = 70 };
+            var colId = new DataGridViewTextBoxColumn { HeaderText = "App ID", FillWeight = 26 };
+            var colName = new DataGridViewTextBoxColumn { HeaderText = "Game Name", FillWeight = 54 };
+            var colFolder = new DataGridViewButtonColumn
+            {
+                HeaderText = "",
+                UseColumnTextForButtonValue = false,
+                FlatStyle = FlatStyle.Flat,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+                Width = 100
+            };
+            colFolder.DefaultCellStyle.BackColor = Theme.Panel;
+            colFolder.DefaultCellStyle.ForeColor = Theme.Text;
+            colFolder.DefaultCellStyle.SelectionBackColor = Theme.Panel;
+            colFolder.DefaultCellStyle.SelectionForeColor = Theme.Text;
             _grid.Columns.Add(colId);
             _grid.Columns.Add(colName);
+            _grid.Columns.Add(colFolder);
+            int folderColIndex = colFolder.Index;
 
+            foreach (var (appid, folderPath) in unresolved)
+            {
+                _unresolvedIds.Add(appid);
+                int i = _grid.Rows.Add(appid, "", "Open Folder");
+                var row = _grid.Rows[i];
+                row.Tag = folderPath;
+                row.DefaultCellStyle.ForeColor = Theme.Warning;
+            }
             foreach (var kv in _resolver.GetCachedNames())
-                _grid.Rows.Add(kv.Key, kv.Value);
+                _grid.Rows.Add(kv.Key, kv.Value, "");
+
+            _grid.CellContentClick += (s, e) =>
+            {
+                if (e.RowIndex < 0 || e.ColumnIndex != folderColIndex) return;
+                if (_grid.Rows[e.RowIndex].Tag is string path) OpenFolder(path);
+            };
 
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Theme.Panel };
             var footerEdge = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.PanelEdge };
@@ -92,16 +126,16 @@ namespace SteamScreenshotBackup
             openFile.Click += (s, e) => OpenTrackingFile();
             footer.Controls.Add(openFile);
 
-            var cancel = new Button
+            var close = new Button
             {
-                Text = "Cancel",
+                Text = "Close",
                 Size = new Size(96, 32),
                 DialogResult = DialogResult.Cancel,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
-            cancel.Location = new Point(footer.Width - 96 - 14, 12);
-            Theme.StyleButton(cancel);
-            footer.Controls.Add(cancel);
+            close.Location = new Point(footer.Width - 96 - 14, 12);
+            Theme.StyleButton(close);
+            footer.Controls.Add(close);
 
             var save = new Button
             {
@@ -118,7 +152,13 @@ namespace SteamScreenshotBackup
             Controls.Add(intro);
             Controls.Add(footerEdge);
             Controls.Add(footer);
-            CancelButton = cancel;
+            CancelButton = close;
+        }
+
+        private void OpenFolder(string path)
+        {
+            try { Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true }); }
+            catch (Exception ex) { Logger.Error("Could not open folder: " + ex.Message); }
         }
 
         private void OpenTrackingFile()
@@ -149,6 +189,7 @@ namespace SteamScreenshotBackup
                 string id = (row.Cells[0].Value?.ToString() ?? "").Trim();
                 string name = (row.Cells[1].Value?.ToString() ?? "").Trim();
                 if (id.Length == 0 && name.Length == 0) continue;
+                if (name.Length == 0 && _unresolvedIds.Contains(id)) continue;   // not identified yet
                 if (!ulong.TryParse(id, out _))
                 {
                     MessageDialog.Info($"\"{id}\" is not a valid App ID (numbers only).");

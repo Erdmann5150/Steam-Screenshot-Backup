@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace SteamScreenshotBackup
@@ -36,7 +37,7 @@ namespace SteamScreenshotBackup
             var top = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Theme.Panel };
             top.Controls.Add(new Label
             {
-                Text = "Choose Backup Files to Delete",
+                Text = "Choose Files to Delete",
                 Font = Theme.HeaderFont,
                 ForeColor = Theme.Text,
                 AutoSize = true,
@@ -112,7 +113,17 @@ namespace SteamScreenshotBackup
             _tree.BeginUpdate();
             _tree.Nodes.Clear();
 
-            var byType = _engine.GetBackupTree();
+            AddTypeNodes(_engine.GetBackupTree(), t => BackupEngine.TypeLabel(t));
+            AddTypeNodes(_engine.GetSteamSourceTree(), t => $"Steam Screenshots \u2014 {BackupEngine.TypeLabel(t)}");
+
+            _tree.EndUpdate();
+            UpdateSummary();
+        }
+
+        private void AddTypeNodes(
+            Dictionary<ScreenshotType, Dictionary<string, List<BackupEngine.BackupFileEntry>>> byType,
+            Func<ScreenshotType, string> label)
+        {
             foreach (var type in new[] { ScreenshotType.Standard, ScreenshotType.HighRes })
             {
                 if (!byType.TryGetValue(type, out var byGame) || byGame.Count == 0) continue;
@@ -133,12 +144,9 @@ namespace SteamScreenshotBackup
                     typeNode.Nodes.Add(gameNode);
                     typeFiles += kv.Value.Count;
                 }
-                typeNode.Text = $"{BackupEngine.TypeLabel(type)}  ({typeFiles})";
+                typeNode.Text = $"{label(type)}  ({typeFiles})";
                 _tree.Nodes.Add(typeNode);
             }
-            _tree.EndUpdate();
-
-            UpdateSummary();
         }
 
         // TreeNode.BackColor only paints behind the text label by default, so a
@@ -273,13 +281,22 @@ namespace SteamScreenshotBackup
             long bytes = 0;
             foreach (var f in files) bytes += f.Size;
             if (!MessageDialog.ConfirmDeletion(
-                    $"Delete {files.Count} selected backup file{(files.Count == 1 ? "" : "s")}?",
+                    $"Delete {files.Count} selected file{(files.Count == 1 ? "" : "s")}?",
                     files.Count, bytes)) return;
 
-            var paths = files.ConvertAll(f => f.Path);
+            var backupPaths = files.Where(f => !f.IsSource).Select(f => f.Path).ToList();
+            var sourcePaths = files.Where(f => f.IsSource).Select(f => f.Path).ToList();
             var engine = _engine;
             ProgressWindow.Run(this, "Deleting Selected Files\u2026", "Sending selected files to the Recycle Bin\u2026",
-                progress => engine.DeleteFiles(paths, progress));
+                progress =>
+                {
+                    int total = backupPaths.Count + sourcePaths.Count, done = 0;
+                    if (backupPaths.Count > 0)
+                        engine.DeleteFiles(backupPaths, (d, t) => progress(done + d, total));
+                    done = backupPaths.Count;
+                    if (sourcePaths.Count > 0)
+                        engine.DeleteFiles(sourcePaths, (d, t) => progress(done + d, total), "Steam screenshot");
+                });
 
             Populate();
         }

@@ -107,8 +107,7 @@ namespace SteamScreenshotBackup
             {
                 Text = "Re-Sync Selected",
                 Size = new Size(150, 32),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Enabled = false
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
             _resync.Location = new Point(bottom.Width - close.Width - 14 - _resync.Width - 10, 12);
             Theme.StyleButton(_resync, primary: true);
@@ -228,7 +227,6 @@ namespace SteamScreenshotBackup
         private void UpdateResyncButton()
         {
             int n = CheckedItems().Count;
-            _resync.Enabled = n > 0 && !_busy;
             _resync.Text = n > 0 ? $"Re-Sync Selected ({n})" : "Re-Sync Selected";
         }
 
@@ -285,7 +283,6 @@ namespace SteamScreenshotBackup
             _busy = busy;
             _rescan.Enabled = !busy;
             _selectAll.Enabled = !busy;
-            if (busy) _resync.Enabled = false;
         }
     }
 }
