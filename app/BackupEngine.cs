@@ -67,6 +67,7 @@ namespace SteamScreenshotBackup
         private List<string> _highResFolders;
         private List<string> _autoHighResFolders = new List<string>();
         private readonly AppNameResolver _resolver;
+        private readonly HashSet<string> _notifiedUnresolved = new HashSet<string>();   // per-session
         private readonly MarkdownIndex _markdown = new MarkdownIndex();
         private readonly BlockingCollection<(ScreenshotType Type, string Path)> _queue
             = new BlockingCollection<(ScreenshotType, string)>();
@@ -96,6 +97,10 @@ namespace SteamScreenshotBackup
         public event Action RestoreNeeded;
         public event Action DestinationOffline;
         public event Action DestinationOnline;
+
+        // Fired after a scan finds backup folders that still can't be named automatically
+        // (new custom shortcuts or delisted games), with how many are new since last notified.
+        public event Action<int> UnresolvedGameFound;
 
         public bool Paused
         {
@@ -436,6 +441,7 @@ namespace SteamScreenshotBackup
         private void ScanForUntrackedAppIdFolders()
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int newlyUnresolved = 0;
             try
             {
                 foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
@@ -450,11 +456,20 @@ namespace SteamScreenshotBackup
 
                         string resolved = _resolver.TryResolveNow(appid);
                         if (resolved != null)
+                        {
                             Logger.Log($"Detected existing backup game folder: {resolved} ({appid})");
+                            _notifiedUnresolved.Remove(appid);   // so a future re-occurrence notifies again
+                        }
+                        else if (_notifiedUnresolved.Add(appid))
+                        {
+                            newlyUnresolved++;
+                        }
                     }
                 }
             }
             catch (Exception ex) { Logger.Warn("App ID tracking scan failed: " + ex.Message); }
+
+            if (newlyUnresolved > 0) UnresolvedGameFound?.Invoke(newlyUnresolved);
         }
 
         private static readonly Regex FallbackAppIdRx =
