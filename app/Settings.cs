@@ -51,6 +51,11 @@ namespace SteamScreenshotBackup
         // Set once existing root-level game folders have been moved under "Standard\".
         public bool StructureMigrated { get; set; }
 
+        // When true, never contact Steam's store API for game names (no network
+        // calls at all). Unrelated to BackupEngine's destination-offline concept
+        // (a NAS being unreachable) - see AppNameResolver for what this gates.
+        public bool OfflineMode { get; set; } = false;
+
         public static string Dir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SteamScreenshotBackup");

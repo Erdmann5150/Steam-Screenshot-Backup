@@ -17,9 +17,14 @@ namespace SteamScreenshotBackup
     //   4. the Steam store API (result cached forever, but periodically re-verified
     //      in the background \u2014 see RefreshStaleEntries)
     // Unresolvable ids fall back to "AppID_<id>" / "Non-Steam App <id>".
+    // Step 4 is skipped entirely when Settings.OfflineMode is on, and compiled
+    // out completely (no HttpClient, no network code) when built with the
+    // OFFLINE_ONLY define.
     internal class AppNameResolver : IDisposable
     {
+#if !OFFLINE_ONLY
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+#endif
 
         private const int StoreThrottleMs = 500;   // min gap between Steam store API calls
 
@@ -43,22 +48,32 @@ namespace SteamScreenshotBackup
         private readonly string _cacheFile;
         private readonly string _verifiedFile;
         private readonly string _steamPath;
+        private readonly Settings _settings;
         private DateTime _lastManifestScan = DateTime.MinValue;
         private DateTime _lastStoreCall = DateTime.MinValue;
+#if !OFFLINE_ONLY
         private Timer _refreshTimer;
+#endif
 
-        public AppNameResolver(string steamPath)
+        public AppNameResolver(string steamPath, Settings settings)
         {
             _steamPath = steamPath;
+            _settings = settings;
             _cacheFile = Path.Combine(Settings.Dir, "appnames.json");   // shared with the PowerShell script
             _verifiedFile = Path.Combine(Settings.Dir, "appnames.verified.json");
             LoadCache();
             LoadVerified();
             ScanManifests();
+#if !OFFLINE_ONLY
             _refreshTimer = new Timer(_ => RefreshStaleEntries(), null, RefreshFirstRun, RefreshInterval);
+#endif
         }
 
+#if OFFLINE_ONLY
+        public void Dispose() { }
+#else
         public void Dispose() => _refreshTimer?.Dispose();
+#endif
 
         public string ResolveFolderName(string appid)
         {
@@ -100,7 +115,7 @@ namespace SteamScreenshotBackup
                     if (_manifestNames.TryGetValue(appid, out var n3)) return n3;
             }
 
-            string name = QueryStore(appid);
+            string name = _settings.OfflineMode ? null : QueryStore(appid);
             lock (_lock)
             {
                 if (name != null) _cache[appid] = name;
@@ -182,6 +197,8 @@ namespace SteamScreenshotBackup
         // Runs on the timer's own thread pool thread; safe to call at any time.
         private void RefreshStaleEntries()
         {
+            if (_settings.OfflineMode) return;
+
             List<string> batch;
             lock (_lock)
             {
@@ -262,6 +279,9 @@ namespace SteamScreenshotBackup
         // below never freezes the UI. Store calls are serialized and spaced at least
         // StoreThrottleMs apart to avoid rate-limiting during large bulk imports; cached
         // names never reach this method, so the delay only applies to real network calls.
+#if OFFLINE_ONLY
+        private string QueryStore(string appid) => null;
+#else
         private string QueryStore(string appid)
         {
             lock (_storeLock)
@@ -293,6 +313,7 @@ namespace SteamScreenshotBackup
             }
             return null;
         }
+#endif
 
         // ----- persistence -----
 

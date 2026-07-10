@@ -129,7 +129,7 @@ namespace SteamScreenshotBackup
             _steamPath = SteamConfig.FindSteamPath()
                 ?? throw new InvalidOperationException("Steam installation not found in the registry.");
             _userdata = Path.Combine(_steamPath, "userdata");
-            _resolver = new AppNameResolver(_steamPath);
+            _resolver = new AppNameResolver(_steamPath, _settings);
             RefreshHighResFolders();
 
             var worker = new Thread(ProcessQueue) { IsBackground = true, Name = "CopyWorker" };

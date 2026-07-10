@@ -27,7 +27,7 @@ namespace SteamScreenshotBackup
         private readonly TextBox _dest;
         private readonly TextBox _highResFolder;
         private readonly CheckBox _standard, _highRes, _autoStart, _autoRestore, _deleteOriginals,
-                                  _showNotifications, _markdownIndex, _previewImport;
+                                  _showNotifications, _markdownIndex, _previewImport, _offlineMode;
         private readonly ComboBox _layout, _theme;
         private bool _suppressDangerPrompt;   // guards the enable-confirmation loop
 
@@ -185,6 +185,19 @@ namespace SteamScreenshotBackup
             y += 26;
             Hint("When off, deletions are only logged \u2014 recover them yourself from \"Re-Sync\".");
             y += 28;
+
+            Section("PRIVACY");
+            _offlineMode = new CheckBox();
+            Check(_offlineMode, "Offline mode: never contact Steam's servers for game names",
+                _settings.OfflineMode, Theme.Text);
+            y += 26;
+            Hint("Game names still resolve from local Steam data; only unrecognized games\n" +
+                 "fall back to an \"AppID_<id>\" folder name.");
+            y += 44;
+#if OFFLINE_ONLY
+            _offlineMode.Checked = true;
+            _offlineMode.Enabled = false;
+#endif
             int generalBottom = y;
 
             // ======================= BACKUP CONFIGURATION =======================
@@ -482,6 +495,7 @@ namespace SteamScreenshotBackup
             bool oldMarkdownIndex = _settings.GenerateMarkdownIndex;
             bool oldPreviewImport = _settings.PreviewBeforeImport;
             bool oldDeleteOriginals = _settings.DeleteOriginals;
+            bool oldOfflineMode = _settings.OfflineMode;
             ThemeMode oldTheme = _settings.Theme;
             bool oldAutoStart = _app.IsAutoStartEnabled;
 
@@ -494,6 +508,7 @@ namespace SteamScreenshotBackup
             bool markdownTurnedOff = _settings.GenerateMarkdownIndex && !_markdownIndex.Checked;
             _settings.GenerateMarkdownIndex = _markdownIndex.Checked;
             _settings.PreviewBeforeImport = _previewImport.Checked;
+            _settings.OfflineMode = _offlineMode.Checked;
             bool deleteOriginalsNewlyEnabled = _deleteOriginals.Checked && !_settings.DeleteOriginals;
             _settings.DeleteOriginals = _deleteOriginals.Checked;
             _settings.Theme = _theme.SelectedIndex switch
@@ -569,6 +584,7 @@ namespace SteamScreenshotBackup
             LogSettingChange("Markdown Index", oldMarkdownIndex, _settings.GenerateMarkdownIndex);
             LogSettingChange("Preview Before Import", oldPreviewImport, _settings.PreviewBeforeImport);
             LogSettingChange("Delete Originals", oldDeleteOriginals, _settings.DeleteOriginals);
+            LogSettingChange("Offline Mode", oldOfflineMode, _settings.OfflineMode);
             LogSettingChange("Theme", oldTheme, _settings.Theme);
             LogSettingChange("Start With Windows", oldAutoStart, _autoStart.Checked);
 

@@ -4,8 +4,9 @@
 
 .DESCRIPTION
     Produces:
-      dist\portable\SteamScreenshotBackup.exe          zero-install, self-contained exe
-      dist\installer\SteamScreenshotBackup-Setup-<v>.exe   Inno Setup installer
+      dist\portable\SteamScreenshotBackup.exe                  zero-install, self-contained exe
+      dist\portable-offline\SteamScreenshotBackup-Offline.exe  same, with network code compiled out
+      dist\installer\SteamScreenshotBackup-Setup-<v>.exe       Inno Setup installer
 
     A copy of both is also placed in a "safe" folder OUTSIDE the repository
     (Documents\SteamBackup Releases\v<version>) so cleanup or uninstall testing can
@@ -48,6 +49,18 @@ New-Item $distPortable -ItemType Directory -Force | Out-Null
 Copy-Item (Join-Path $publishDir 'SteamScreenshotBackup.exe') $distPortable -Force
 Write-Host "Portable exe -> $distPortable"
 
+# --- 1b. Publish the offline-only portable exe (network code compiled out) ---
+$publishDirOffline = Join-Path $root 'app\bin\Release\net8.0-windows\win-x64\publish-offline'
+dotnet publish $csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true `
+    -p:DefineConstants=OFFLINE_ONLY -o $publishDirOffline --nologo
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish (offline) failed" }
+
+$distPortableOffline = Join-Path $root 'dist\portable-offline'
+New-Item $distPortableOffline -ItemType Directory -Force | Out-Null
+Copy-Item (Join-Path $publishDirOffline 'SteamScreenshotBackup.exe') `
+    (Join-Path $distPortableOffline 'SteamScreenshotBackup-Offline.exe') -Force
+Write-Host "Offline portable exe -> $distPortableOffline"
+
 # --- 2. Compile the installer ---
 $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
           "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
@@ -64,6 +77,7 @@ Write-Host "Installer -> $distInstaller"
 $safe = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "SteamBackup Releases\v$version"
 New-Item $safe -ItemType Directory -Force | Out-Null
 Copy-Item (Join-Path $distPortable 'SteamScreenshotBackup.exe') $safe -Force
+Copy-Item (Join-Path $distPortableOffline 'SteamScreenshotBackup-Offline.exe') $safe -Force
 
 $installerFile = Join-Path $distInstaller "SteamScreenshotBackup-Setup-$version.exe"
 if (-not (Test-Path $installerFile)) { throw "Installer not found at $installerFile" }

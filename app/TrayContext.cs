@@ -142,6 +142,8 @@ namespace SteamScreenshotBackup
                     _settings.ShowNotifications = false;
                 if (k?.GetValue("PreviewImportsDefault") is int p && p == 1)
                     _settings.PreviewBeforeImport = true;
+                if (k?.GetValue("OfflineModeDefault") is int o && o == 1)
+                    _settings.OfflineMode = true;
             }
             catch { }
 
