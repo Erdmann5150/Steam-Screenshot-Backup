@@ -21,6 +21,9 @@ namespace SteamScreenshotBackup
         private readonly Action<LogEntry> _onAdded;
 
         private Button _pauseBtn;
+        private Button _namesBtn;
+        private int _unresolvedCount;
+        private readonly ToolTip _tip = new ToolTip();
         private Label _statGames, _statFiles, _statSession;
         private Label _statGamesCap, _statFilesCap, _statSessionCap;
         private Panel _top, _stats, _bottom;
@@ -78,12 +81,17 @@ namespace SteamScreenshotBackup
             _pauseBtn.Click += (s, e) => _app.SetPaused(!_app.IsPaused);
             var settings = MakeButton("Settings", 90);
             settings.Click += (s, e) => _app.ShowSettings(this);
-            var names = MakeButton("Game Names", 110);
-            names.Click += (s, e) => new GameNamesWindow(_app.Engine).ShowDialog(this);
+            _namesBtn = MakeButton("Game Names", 110);
+            _namesBtn.Click += (s, e) =>
+            {
+                new GameNamesWindow(_app.Engine).ShowDialog(this);
+                RefreshUnresolvedBadge();   // names may have just been fixed
+            };
+            _namesBtn.Paint += DrawUnresolvedBadge;
             var utilities = MakeButton("\u2699 Utilities", 120);
             utilities.Click += (s, e) => ShowUtilitiesMenu(utilities);
 
-            _buttons = new[] { backupNow, openFolder, resync, _pauseBtn, settings, names, utilities };
+            _buttons = new[] { backupNow, openFolder, resync, _pauseBtn, settings, _namesBtn, utilities };
             int x = 14;
             foreach (var b in _buttons)
             {
@@ -216,11 +224,22 @@ namespace SteamScreenshotBackup
             };
             Logger.Added += _onAdded;
             _app.PauseChanged += OnPauseChanged;
+            Action<int> onUnresolvedCountChanged = count =>
+            {
+                try
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke(new Action(() => SetUnresolvedCount(count)));
+                }
+                catch { }   // window torn down mid-callback
+            };
+            _app.Engine.UnresolvedCountChanged += onUnresolvedCountChanged;
             FormClosed += (s, e) =>
             {
                 Logger.Added -= _onAdded;
                 Theme.Changed -= ApplyTheme;
                 _app.PauseChanged -= OnPauseChanged;
+                _app.Engine.UnresolvedCountChanged -= onUnresolvedCountChanged;
             };
 
             _statsDebounce = new System.Windows.Forms.Timer { Interval = 800 };
@@ -231,6 +250,7 @@ namespace SteamScreenshotBackup
             RefreshSessionStat();
             RefreshTotals();
             LayoutStats();
+            RefreshUnresolvedBadge();
         }
 
         // ------------------------------------------------------------- theming
@@ -395,6 +415,48 @@ namespace SteamScreenshotBackup
                 }
                 catch { }
             });
+        }
+
+        // ------------------------------------------------------- unresolved-game badge
+
+        // Recomputes the current count directly from disk (used at startup and right
+        // after the Game Names window closes, where waiting for the next background
+        // scan would leave a just-fixed badge showing stale).
+        private void RefreshUnresolvedBadge()
+        {
+            var engine = _app.Engine;
+            Task.Run(() =>
+            {
+                int count = engine.FindUnresolvedGameFolders().Count;
+                try
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke(new Action(() => SetUnresolvedCount(count)));
+                }
+                catch { }   // window torn down mid-callback
+            });
+        }
+
+        private void SetUnresolvedCount(int count)
+        {
+            _unresolvedCount = count;
+            _tip.SetToolTip(_namesBtn, count > 0
+                ? $"{count} game folder{(count == 1 ? "" : "s")} couldn't be named automatically"
+                : null);
+            _namesBtn.Invalidate();
+        }
+
+        // A small dot in the button's top-right corner, since the button's own text
+        // stays fixed-width ("Game Names") and a toast notification alone is easy to miss.
+        private void DrawUnresolvedBadge(object sender, PaintEventArgs e)
+        {
+            if (_unresolvedCount <= 0) return;
+            const int d = 10;
+            var rect = new Rectangle(_namesBtn.Width - d - 4, 3, d, d);
+            using (var fill = new SolidBrush(Theme.Warning))
+                e.Graphics.FillEllipse(fill, rect);
+            using (var border = new Pen(Theme.Panel, 1.5f))
+                e.Graphics.DrawEllipse(border, rect);
         }
 
         internal static string FormatBytes(long b)

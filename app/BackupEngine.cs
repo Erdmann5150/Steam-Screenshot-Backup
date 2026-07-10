@@ -102,6 +102,12 @@ namespace SteamScreenshotBackup
         // (new custom shortcuts or delisted games), with how many are new since last notified.
         public event Action<int> UnresolvedGameFound;
 
+        // Fired at the end of every scan with the current total number of backup folders
+        // that still can't be named automatically (0 once they're all resolved/renamed).
+        // Lets the main window keep a persistent "Game Names" badge in sync without its
+        // own polling, in case the one-shot notification above gets missed.
+        public event Action<int> UnresolvedCountChanged;
+
         public bool Paused
         {
             get => _paused;
@@ -441,7 +447,7 @@ namespace SteamScreenshotBackup
         private void ScanForUntrackedAppIdFolders()
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            int newlyUnresolved = 0;
+            int newlyUnresolved = 0, stillUnresolved = 0;
             try
             {
                 foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
@@ -460,9 +466,10 @@ namespace SteamScreenshotBackup
                             Logger.Log($"Detected existing backup game folder: {resolved} ({appid})");
                             _notifiedUnresolved.Remove(appid);   // so a future re-occurrence notifies again
                         }
-                        else if (_notifiedUnresolved.Add(appid))
+                        else
                         {
-                            newlyUnresolved++;
+                            stillUnresolved++;
+                            if (_notifiedUnresolved.Add(appid)) newlyUnresolved++;
                         }
                     }
                 }
@@ -470,6 +477,7 @@ namespace SteamScreenshotBackup
             catch (Exception ex) { Logger.Warn("App ID tracking scan failed: " + ex.Message); }
 
             if (newlyUnresolved > 0) UnresolvedGameFound?.Invoke(newlyUnresolved);
+            UnresolvedCountChanged?.Invoke(stillUnresolved);
         }
 
         private static readonly Regex FallbackAppIdRx =
