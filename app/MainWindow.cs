@@ -79,7 +79,7 @@ namespace SteamScreenshotBackup
             var settings = MakeButton("Settings", 90);
             settings.Click += (s, e) => _app.ShowSettings(this);
             var names = MakeButton("Game Names", 110);
-            names.Click += (s, e) => new GameNamesWindow(_app.Engine.Resolver).ShowDialog(this);
+            names.Click += (s, e) => new GameNamesWindow(_app.Engine).ShowDialog(this);
             var utilities = MakeButton("\u2699 Utilities", 120);
             utilities.Click += (s, e) => ShowUtilitiesMenu(utilities);
 

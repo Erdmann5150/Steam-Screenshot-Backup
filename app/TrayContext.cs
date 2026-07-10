@@ -179,7 +179,7 @@ namespace SteamScreenshotBackup
 
         public void OpenGameNames()
         {
-            using var dlg = new GameNamesWindow(_engine.Resolver);
+            using var dlg = new GameNamesWindow(_engine);
             dlg.ShowDialog();
         }
 

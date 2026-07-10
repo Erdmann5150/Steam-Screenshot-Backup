@@ -466,6 +466,32 @@ namespace SteamScreenshotBackup
             return m.Success ? m.Groups[1].Value : null;
         }
 
+        // Same fallback-folder scan as ScanForUntrackedAppIdFolders, but returns the
+        // still-unresolved appid/folder pairs instead of retrying resolution, so the
+        // "Game Names" window can point the user at the actual screenshots to identify
+        // a custom shortcut or delisted game that no automatic source could name.
+        public List<(string AppId, string FolderPath)> FindUnresolvedGameFolders()
+        {
+            var result = new List<(string, string)>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (var typeFolder in new[] { StandardFolder, HighResFolder })
+                {
+                    string root = Path.Combine(Destination, typeFolder);
+                    if (!Directory.Exists(root)) continue;
+                    foreach (var dir in Directory.GetDirectories(root, "*", SearchOption.AllDirectories))
+                    {
+                        string appid = ExtractFallbackAppId(Path.GetFileName(dir));
+                        if (appid == null || !seen.Add(appid) || _resolver.IsTracked(appid)) continue;
+                        result.Add((appid, dir));
+                    }
+                }
+            }
+            catch (Exception ex) { Logger.Warn("Unresolved game folder scan failed: " + ex.Message); }
+            return result;
+        }
+
         // Retroactive one-shot for "delete originals after import": sends every original
         // that already has a verified backup to the Recycle Bin. Reports (done, total).
         public int PurgeImportedOriginals(Action<int, int> progress = null)
@@ -831,13 +857,15 @@ namespace SteamScreenshotBackup
             return (count, bytes);
         }
 
-        // One entry in the targeted-deletion tree: a single backup file under some
-        // game folder.
+        // One entry in the targeted-deletion tree: a single file under some game folder,
+        // either a backup copy (IsSource false) or one of Steam's own screenshot files
+        // (IsSource true).
         public class BackupFileEntry
         {
             public string Path;
             public string Name;
             public long Size;
+            public bool IsSource;
         }
 
         // The whole backup, grouped by type then game, for the targeted-deletion
@@ -868,10 +896,11 @@ namespace SteamScreenshotBackup
             return result;
         }
 
-        // Sends a specific set of backup files to the Recycle Bin (used by the targeted
-        // deletion window). Dest-watcher events are suppressed the same way the bulk
-        // delete methods do, since this can move hundreds of files at once.
-        public int DeleteFiles(IReadOnlyList<string> paths, Action<int, int> progress = null)
+        // Sends a specific set of files to the Recycle Bin (used by the targeted deletion
+        // window, for both the backup copy and Steam's own source screenshots). Dest-watcher
+        // events are suppressed the same way the bulk delete methods do, since this can move
+        // hundreds of files at once.
+        public int DeleteFiles(IReadOnlyList<string> paths, Action<int, int> progress = null, string label = "backup file")
         {
             int deleted = 0, done = 0;
             _suppressDestEvents = true;
@@ -884,7 +913,7 @@ namespace SteamScreenshotBackup
                     progress?.Invoke(++done, paths.Count);
                 }
                 if (deleted > 0)
-                    Logger.Log($"Deleted {deleted} selected backup file{(deleted == 1 ? "" : "s")} " +
+                    Logger.Log($"Deleted {deleted} selected {label}{(deleted == 1 ? "" : "s")} " +
                                "(sent to the Recycle Bin).");
             }
             finally
@@ -893,6 +922,29 @@ namespace SteamScreenshotBackup
                 _unsuppressTimer.Change(3000, Timeout.Infinite);
             }
             return deleted;
+        }
+
+        // Steam's own screenshot files (the un-backed-up originals under userdata\...\760\remote
+        // and the high-res external-copy folder), grouped the same way GetBackupTree groups the
+        // backup copy \u2014 lets the targeted-deletion window offer the same per-file control over
+        // Steam's own screenshots, not just this app's backup of them.
+        public Dictionary<ScreenshotType, Dictionary<string, List<BackupFileEntry>>> GetSteamSourceTree()
+        {
+            var result = new Dictionary<ScreenshotType, Dictionary<string, List<BackupFileEntry>>>();
+            foreach (var (path, appid, type) in EnumerateSources())
+            {
+                if (!result.TryGetValue(type, out var byGame))
+                {
+                    byGame = new Dictionary<string, List<BackupFileEntry>>(StringComparer.OrdinalIgnoreCase);
+                    result[type] = byGame;
+                }
+                string game = _resolver.ResolveFolderName(appid);
+                if (!byGame.TryGetValue(game, out var list)) { list = new(); byGame[game] = list; }
+                long size = 0;
+                try { size = new FileInfo(path).Length; } catch { }
+                list.Add(new BackupFileEntry { Path = path, Name = Path.GetFileName(path), Size = size, IsSource = true });
+            }
+            return result;
         }
 
         // Given a path relative to a type folder, find the {game} segment using the
