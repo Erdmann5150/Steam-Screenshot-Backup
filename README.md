@@ -298,14 +298,17 @@ comfortable, or build from source (above) if you'd rather not.
 recurring expense for a free hobby project. The source is public if you want
 to verify or build it yourself instead of trusting the download.
 
-**Is it actually safe? Antivirus/VirusTotal?** All three v3.10.0 downloads
-scan clean on VirusTotal:
-[installer](https://www.virustotal.com/gui/file/513c32bf085fd04a383514998cd8c4c7ba013b74266c04bcb805cb43c57823d4/summary)
-(0/67),
-[portable](https://www.virustotal.com/gui/file/d399f4d867fac2966f7a59e679e642f4706ee912dddbe9ff0bfef756e14fe83a/summary)
-(0/65), and
-[offline portable](https://www.virustotal.com/gui/file/6d013052d5832f286d4a30381c50cb317a8bace61f4651958d613d50d5600460/summary)
-(0/67).
+**Is it actually safe? Antivirus/VirusTotal?** The v3.11.0
+[installer](https://www.virustotal.com/gui/file/d4ce1eefc67f845e9def2ec54da8603df080d46e260c0679b725c3f2e917bda9/summary)
+(0/66) and
+[portable](https://www.virustotal.com/gui/file/e65f851a2d5d8496f9fccd869458806b9c0698e18e3ccb0c286306ce0f7d32c1/summary)
+(0/67) downloads scan clean on VirusTotal. The
+[offline portable](https://www.virustotal.com/gui/file/4110aa5eab2aa868ab51111f959aee622a54f376cb8e7fdf1e869daae957cdce/summary)
+build gets one flag (1/67, Zillya: "Tool.BroHack.Win64.104") - a generic
+heuristic that self-contained single-file .NET executables trip on
+occasionally (it hit the plain portable build back in v3.9.2 the same way);
+every other engine, including the ones that actually do behavioral analysis,
+reports it clean.
 
 **Does this upload my screenshots anywhere? Does it phone home?** No screenshot
 data, ever - see [What it does with your files](#what-it-does-with-your-files).
