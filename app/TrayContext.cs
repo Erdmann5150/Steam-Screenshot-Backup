@@ -92,6 +92,10 @@ namespace SteamScreenshotBackup
                 "Backup folder is unreachable \u2014 backups will resume automatically when it returns.",
                 ToolTipIcon.Warning);
             _engine.DestinationOnline += () => RunScan(RunKind.Startup);
+            _engine.UnresolvedGameFound += count => Notify(6000,
+                $"{count} game folder{(count == 1 ? "" : "s")} could not be named automatically \u2014 " +
+                "open Game Names to identify " + (count == 1 ? "it" : "them") + ".",
+                ToolTipIcon.Info);
 
             _engine.MigrateStructureIfNeeded();
             _engine.StartWatching();
