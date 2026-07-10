@@ -88,8 +88,7 @@ namespace SteamScreenshotBackup
             {
                 Text = "Delete Selected",
                 Size = new Size(140, 32),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Enabled = false
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
             _deleteBtn.Location = new Point(bottom.Width - close.Width - 14 - _deleteBtn.Width - 10, 12);
             Theme.StyleButton(_deleteBtn, primary: true);
@@ -243,7 +242,6 @@ namespace SteamScreenshotBackup
                 ? "Nothing selected"
                 : $"{folders} folder{(folders == 1 ? "" : "s")}, " +
                   $"{files.Count} file{(files.Count == 1 ? "" : "s")} selected  \u00B7  {MainWindow.FormatBytes(bytes)}";
-            _deleteBtn.Enabled = files.Count > 0;
         }
 
         // A "folder" (per-game node) counts as selected only when every file under it
