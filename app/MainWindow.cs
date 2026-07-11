@@ -270,7 +270,10 @@ namespace SteamScreenshotBackup
             menu.Items.Add("Delete Standard Backups", null, (s, e) => DeleteTypeBackups(ScreenshotType.Standard));
             menu.Items.Add("Delete High-Resolution Backups", null, (s, e) => DeleteTypeBackups(ScreenshotType.HighRes));
             menu.Items.Add("Delete Markdown Indexes", null, (s, e) => DeleteMarkdownIndexes());
-            menu.Items.Add("Delete Original Steam Screenshot Files", null, (s, e) => DeleteImportedOriginals());
+            menu.Items.Add("Delete Standard Original Steam Files", null,
+                (s, e) => DeleteImportedOriginals(ScreenshotType.Standard));
+            menu.Items.Add("Delete High-Resolution Original Steam Files", null,
+                (s, e) => DeleteImportedOriginals(ScreenshotType.HighRes));
             menu.Items.Add("Clear Application Logs", null, (s, e) => ClearApplicationLogs());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Granular Deletion", null,
@@ -301,14 +304,15 @@ namespace SteamScreenshotBackup
                 progress => engine.DeleteMarkdownIndexes(progress));
         }
 
-        private void DeleteImportedOriginals()
+        private void DeleteImportedOriginals(ScreenshotType type)
         {
             var engine = _app.Engine;
-            var (count, bytes) = engine.PreviewPurgeImportedOriginals();
+            string label = BackupEngine.TypeLabel(type);
+            var (count, bytes) = engine.PreviewPurgeImportedOriginals(type);
             if (!MessageDialog.ConfirmDeletion(
-                    "Delete original Steam screenshots that are already backed up?", count, bytes)) return;
-            ProgressWindow.Run(this, "Deleting Originals\u2026", "Sending imported originals to the Recycle Bin\u2026",
-                progress => engine.PurgeImportedOriginals(progress));
+                    $"Delete original {label} Steam screenshots that are already backed up?", count, bytes)) return;
+            ProgressWindow.Run(this, "Deleting Originals\u2026", $"Sending imported {label} originals to the Recycle Bin\u2026",
+                progress => engine.PurgeImportedOriginals(progress, type));
         }
 
         private void ClearApplicationLogs()
@@ -366,6 +370,7 @@ namespace SteamScreenshotBackup
             foreach (Control c in _top.Controls)
                 if (c is Button b) Theme.StyleButton(b, (bool)b.Tag);
             ApplyUnresolvedHighlight();
+            ApplyPauseHighlight();
             foreach (Control c in _bottom.Controls)
             {
                 if (c is Button b) Theme.StyleButton(b, (bool)b.Tag);
@@ -478,6 +483,23 @@ namespace SteamScreenshotBackup
         private void OnPauseChanged()
         {
             _pauseBtn.Text = _app.IsPaused ? "Resume Monitoring" : "Pause Monitoring";
+            ApplyPauseHighlight();
+        }
+
+        // Mirrors ApplyUnresolvedHighlight: while monitoring is paused (button reads
+        // "Resume Monitoring"), swap the button's normal border for a red one so the
+        // paused state is obvious at a glance, not just in the button text.
+        private void ApplyPauseHighlight()
+        {
+            if (_app.IsPaused)
+            {
+                _pauseBtn.FlatAppearance.BorderColor = Theme.Error;
+                _pauseBtn.FlatAppearance.BorderSize = 2;
+            }
+            else
+            {
+                Theme.StyleButton(_pauseBtn, false);
+            }
         }
 
         // ------------------------------------------------------------- log list
@@ -488,7 +510,8 @@ namespace SteamScreenshotBackup
             2 => e.Level == LogLevel.Restore,
             3 => e.Level == LogLevel.Deletion,
             4 => e.Level == LogLevel.Warning || e.Level == LogLevel.Error,
-            5 => e.Level == LogLevel.Info || e.Level == LogLevel.Update,
+            5 => e.Level == LogLevel.Info || e.Level == LogLevel.Update ||
+                 e.Level == LogLevel.Paused || e.Level == LogLevel.Resumed,
             _ => true
         };
 
@@ -522,6 +545,8 @@ namespace SteamScreenshotBackup
                 LogLevel.Warning => "Warning",
                 LogLevel.Error => "Error",
                 LogLevel.Update => "Update",
+                LogLevel.Paused => "Paused",
+                LogLevel.Resumed => "Resumed",
                 _ => "Info"
             };
             var item = new ListViewItem(e.Time.ToString("yyyy-MM-dd HH:mm:ss")) { Tag = e };
@@ -551,6 +576,8 @@ namespace SteamScreenshotBackup
             LogLevel.Warning => Theme.Warning,
             LogLevel.Error => Theme.Error,
             LogLevel.Update => Theme.Accent,
+            LogLevel.Paused => Theme.Warning,
+            LogLevel.Resumed => Theme.Success,
             _ => Theme.TextDim
         };
 

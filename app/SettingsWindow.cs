@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -39,6 +40,14 @@ namespace SteamScreenshotBackup
         private readonly Button _tabGeneral, _tabBackup;
         private readonly Button _apply;
 
+        // Chrome outside the two pages, kept as fields (rather than constructor locals)
+        // so ApplyTheme can re-color them when the theme changes while this window is open.
+        private readonly Panel _footer, _footerEdge, _contentHost, _tabBar, _tabEdge;
+        private readonly Button _uninstall, _close, _browse, _hrBrowse;
+        private readonly Label _dangerZoneLabel;
+        private readonly List<Label> _dimLabels = new();
+        private int _activeTab;
+
         // Snapshot of every field's last-applied value, refreshed after each successful
         // Apply. Compared against current control state so Apply can gray itself out
         // once there's nothing left to save.
@@ -66,10 +75,10 @@ namespace SteamScreenshotBackup
             Theme.ApplyWindow(this);
 
             // ----- footer (built first so anchored buttons settle to the right edge) -----
-            var footer = new Panel { Dock = DockStyle.Bottom, Height = 60, BackColor = Theme.Panel };
-            var footerEdge = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.PanelEdge };
+            var footer = _footer = new Panel { Dock = DockStyle.Bottom, Height = 60, BackColor = Theme.Panel };
+            var footerEdge = _footerEdge = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.PanelEdge };
 
-            var uninstall = new Button { Text = "Uninstall", Size = new Size(110, 32), Location = new Point(14, 13) };
+            var uninstall = _uninstall = new Button { Text = "Uninstall", Size = new Size(110, 32), Location = new Point(14, 13) };
             Theme.StyleButton(uninstall);
             uninstall.ForeColor = Theme.Error;
             uninstall.Click += (s, e) => { Close(); _app.Uninstall(); };
@@ -77,7 +86,7 @@ namespace SteamScreenshotBackup
 
             // Close just closes the window; it never implies "discard" the way Cancel
             // would, since Apply may already have saved earlier changes in this session.
-            var close = new Button
+            var close = _close = new Button
             {
                 Text = "Close",
                 Size = new Size(96, 32),
@@ -104,7 +113,7 @@ namespace SteamScreenshotBackup
             footer.Controls.Add(_apply);
 
             // ----- content host + two pages -----
-            var contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+            var contentHost = _contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
             _generalPage = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Background };
             _backupPage = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Background, Visible = false };
             Theme.ApplyScrollbars(_generalPage);
@@ -118,14 +127,16 @@ namespace SteamScreenshotBackup
             int y = 20;
             void Section(string text)
             {
-                page.Controls.Add(new Label
+                var l = new Label
                 {
                     Text = text,
                     Font = Theme.HeaderFont,
                     ForeColor = Theme.TextDim,
                     AutoSize = true,
                     Location = new Point(24, y)
-                });
+                };
+                page.Controls.Add(l);
+                _dimLabels.Add(l);
                 y += 22;
             }
             Label Hint(string text, int x = 42)
@@ -139,6 +150,7 @@ namespace SteamScreenshotBackup
                     Location = new Point(x, y)
                 };
                 page.Controls.Add(l);
+                _dimLabels.Add(l);
                 return l;
             }
             CheckBox Check(CheckBox box, string text, bool value, Color color)
@@ -246,7 +258,7 @@ namespace SteamScreenshotBackup
                 BorderStyle = BorderStyle.FixedSingle
             };
             Theme.StyleInput(_dest);
-            var browse = new Button { Text = "Browse", Size = new Size(92, _dest.Height + 2) };
+            var browse = _browse = new Button { Text = "Browse", Size = new Size(92, _dest.Height + 2) };
             browse.Location = new Point(440, y - 1);
             Theme.StyleButton(browse);
             browse.Click += (s, e) => Browse();
@@ -280,7 +292,7 @@ namespace SteamScreenshotBackup
             };
             if (detected != null) _highResFolder.PlaceholderText = detected;
             Theme.StyleInput(_highResFolder);
-            var hrBrowse = new Button { Text = "Browse", Size = new Size(92, _highResFolder.Height + 2) };
+            var hrBrowse = _hrBrowse = new Button { Text = "Browse", Size = new Size(92, _highResFolder.Height + 2) };
             hrBrowse.Location = new Point(440, y - 1);
             Theme.StyleButton(hrBrowse);
             hrBrowse.Click += (s, e) => BrowseHighRes();
@@ -305,14 +317,15 @@ namespace SteamScreenshotBackup
             y += 46;
 
             // ----- danger zone -----
-            page.Controls.Add(new Label
+            _dangerZoneLabel = new Label
             {
                 Text = "DANGER ZONE",
                 Font = Theme.HeaderFont,
                 ForeColor = Theme.Error,
                 AutoSize = true,
                 Location = new Point(24, y)
-            });
+            };
+            page.Controls.Add(_dangerZoneLabel);
             y += 22;
             _deleteOriginals = new CheckBox();
             Check(_deleteOriginals, "Delete original Steam screenshots after import",
@@ -325,8 +338,8 @@ namespace SteamScreenshotBackup
             int backupBottom = y;
 
             // ----- tab bar -----
-            var tabBar = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = Theme.Panel };
-            var tabEdge = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.PanelEdge };
+            var tabBar = _tabBar = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = Theme.Panel };
+            var tabEdge = _tabEdge = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.PanelEdge };
             _tabGeneral = MakeTab("General", 8, 132);
             _tabBackup = MakeTab("Backup Configuration", 8 + 132, 200);
             _indicator = new Panel { Height = 2, BackColor = Theme.Accent };
@@ -360,6 +373,59 @@ namespace SteamScreenshotBackup
 
             CaptureBaseline();
             WireDirtyTracking();
+
+            Theme.Changed += ApplyTheme;
+            FormClosed += (s, e) => Theme.Changed -= ApplyTheme;
+        }
+
+        // Re-applies every color this window set at construction time, so switching
+        // the Appearance dropdown and clicking Apply re-themes this window immediately
+        // instead of only the main window (which subscribes itself the same way).
+        private void ApplyTheme()
+        {
+            Theme.ApplyWindow(this);
+            _footer.BackColor = Theme.Panel;
+            _footerEdge.BackColor = Theme.PanelEdge;
+            _contentHost.BackColor = Theme.Background;
+            _generalPage.BackColor = Theme.Background;
+            _backupPage.BackColor = Theme.Background;
+            _tabBar.BackColor = Theme.Panel;
+            _tabEdge.BackColor = Theme.PanelEdge;
+            _indicator.BackColor = Theme.Accent;
+
+            Theme.StyleButton(_uninstall);
+            _uninstall.ForeColor = Theme.Error;
+            Theme.StyleButton(_close);
+            Theme.StyleButton(_apply, primary: true);
+            Theme.StyleButton(_browse);
+            Theme.StyleButton(_hrBrowse);
+
+            foreach (var tab in new[] { _tabGeneral, _tabBackup })
+            {
+                tab.BackColor = Theme.Panel;
+                tab.FlatAppearance.MouseOverBackColor = Theme.Selection;
+                tab.FlatAppearance.MouseDownBackColor = Theme.Selection;
+            }
+            SelectTab(_activeTab);
+
+            Theme.StyleInput(_theme);
+            Theme.StyleInput(_layout);
+            Theme.StyleInput(_dest);
+            Theme.StyleInput(_highResFolder);
+
+            foreach (var l in _dimLabels) l.ForeColor = Theme.TextDim;
+            _dangerZoneLabel.ForeColor = Theme.Error;
+
+            foreach (var chk in new[]
+                     { _showNotifications, _autoStart, _markdownIndex, _previewImport,
+                       _autoRestore, _offlineMode, _standard, _highRes })
+                chk.ForeColor = Theme.Text;
+#if !OFFLINE_ONLY
+            _checkForUpdates.ForeColor = Theme.Text;
+#endif
+            _deleteOriginals.ForeColor = Theme.Error;
+
+            Invalidate(true);
         }
 
         // Snapshots every field's currently-applied value. Called once at load and again
@@ -465,6 +531,7 @@ namespace SteamScreenshotBackup
 
         private void SelectTab(int i)
         {
+            _activeTab = i;
             _generalPage.Visible = i == 0;
             _backupPage.Visible = i == 1;
             _tabGeneral.ForeColor = i == 0 ? Theme.Text : Theme.TextDim;

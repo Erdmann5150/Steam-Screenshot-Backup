@@ -167,6 +167,8 @@ at the binary level rather than a runtime setting.
   Start with Windows, Uninstall, and Exit.
 - **Re-Sync** reviews everything in Steam that's missing from your backup,
   grouped by game, so you can restore just what you pick.
+- **Pause Monitoring** gets a red border while paused, so it's obvious at a
+  glance that new screenshots aren't being backed up right now.
 - **Settings** has two tabs: *General* (theme, notifications, startup, the
   Markdown index, offline mode) and *Backup Configuration* (folder, screenshot
   types, layout, and the danger zone). **Apply** saves in the background
@@ -302,13 +304,13 @@ comfortable, or build from source (above) if you'd rather not.
 recurring expense for a free hobby project. The source is public if you want
 to verify or build it yourself instead of trusting the download.
 
-**Is it actually safe? Antivirus/VirusTotal?** The v3.11.5
-[installer](https://www.virustotal.com/gui/file/ce0adb58afd6161fcbc93ad247669bc29eb71a7497f5bc267f9df122836bde41/summary)
-scans clean (0/69). The
-[portable](https://www.virustotal.com/gui/file/53bc88b2f589e7f5d38ddb3b3694eb4e233c22bf76c00e194bd01daba8bebb46/summary)
-and
-[offline portable](https://www.virustotal.com/gui/file/2443761f97b66e75f1d73908318580b9a75e73e8b390a824e125d1ee2d2c7753/summary)
-builds (1/67 each) get flagged only by Zillya ("Tool.BroHack.Win64.104") -
+**Is it actually safe? Antivirus/VirusTotal?** The v3.11.6
+[installer](https://www.virustotal.com/gui/file/b7d99165db2230e2603ab36bfee8bb2b5253a57744197196ef8aec5bd6e71400/summary)
+scans clean (0/68). The
+[portable](https://www.virustotal.com/gui/file/78aa89872483dbbc3bcc0fea6c5bdb81cb3189b3817b3c6d2c5cc183bd682888/summary)
+(1/67) and
+[offline portable](https://www.virustotal.com/gui/file/1f163ac6eb62af11eafede853abb0f617c3d331ee29749415e434d25c3c77b15/summary)
+(1/68) builds get flagged only by Zillya ("Tool.BroHack.Win64.104") -
 a generic heuristic that self-contained single-file .NET executables trip
 on occasionally (it hit the same build this way back in v3.9.2 and
 v3.11.0 too); every engine that actually does behavioral analysis

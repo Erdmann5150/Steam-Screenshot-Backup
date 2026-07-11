@@ -524,19 +524,20 @@ namespace SteamScreenshotBackup
 
         // Retroactive one-shot for "delete originals after import": sends every original
         // that already has a verified backup to the Recycle Bin. Reports (done, total).
-        public int PurgeImportedOriginals(Action<int, int> progress = null)
+        // An optional type restricts this to just Standard or just High Resolution originals.
+        public int PurgeImportedOriginals(Action<int, int> progress = null, ScreenshotType? type = null)
         {
-            var sources = EnumerateSources().ToList();
+            var sources = EnumerateSources().Where(s => type == null || s.Type == type).ToList();
             int deleted = 0, done = 0;
-            foreach (var (path, appid, type) in sources)
+            foreach (var (path, appid, srcType) in sources)
             {
                 try
                 {
                     string game = _resolver.ResolveFolderName(appid);
-                    var (ts, destName) = ConvertName(Path.GetFileName(path), type);
+                    var (ts, destName) = ConvertName(Path.GetFileName(path), srcType);
                     if (destName != null)
                     {
-                        string dest = Path.Combine(Destination, TypeFolder(type), ExpandTemplate(game, ts), destName);
+                        string dest = Path.Combine(Destination, TypeFolder(srcType), ExpandTemplate(game, ts), destName);
                         if (File.Exists(path) && File.Exists(dest) &&
                             new FileInfo(dest).Length >= new FileInfo(path).Length)
                         {
@@ -851,17 +852,18 @@ namespace SteamScreenshotBackup
         // Count and total size of original Steam screenshots that already have a
         // verified backup copy, for the "are you sure" prompt shown before
         // PurgeImportedOriginals actually deletes them.
-        public (int Count, long Bytes) PreviewPurgeImportedOriginals()
+        public (int Count, long Bytes) PreviewPurgeImportedOriginals(ScreenshotType? type = null)
         {
             int count = 0; long bytes = 0;
-            foreach (var (path, appid, type) in EnumerateSources())
+            foreach (var (path, appid, srcType) in EnumerateSources())
             {
+                if (type != null && srcType != type) continue;
                 try
                 {
                     string game = _resolver.ResolveFolderName(appid);
-                    var (ts, destName) = ConvertName(Path.GetFileName(path), type);
+                    var (ts, destName) = ConvertName(Path.GetFileName(path), srcType);
                     if (destName == null) continue;
-                    string dest = Path.Combine(Destination, TypeFolder(type), ExpandTemplate(game, ts), destName);
+                    string dest = Path.Combine(Destination, TypeFolder(srcType), ExpandTemplate(game, ts), destName);
                     if (!File.Exists(path) || !File.Exists(dest)) continue;
                     var srcInfo = new FileInfo(path);
                     if (new FileInfo(dest).Length < srcInfo.Length) continue;

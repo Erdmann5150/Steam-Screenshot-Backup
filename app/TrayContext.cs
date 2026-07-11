@@ -189,7 +189,8 @@ namespace SteamScreenshotBackup
         {
             if (_engine == null) return;
             _engine.Paused = paused;
-            Logger.Log(paused ? "Watching paused." : "Watching resumed.");
+            if (paused) Logger.Paused("Watching paused.");
+            else Logger.Resumed("Watching resumed.");
             PauseChanged?.Invoke();
         }
 
