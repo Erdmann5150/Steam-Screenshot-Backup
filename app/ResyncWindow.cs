@@ -184,7 +184,6 @@ namespace SteamScreenshotBackup
                 : $"{missing.Count} screenshot{(missing.Count == 1 ? "" : "s")} across " +
                   $"{games} game{(games == 1 ? "" : "s")} can be re-synced.";
             SetBusy(false);
-            UpdateResyncButton();
         }
 
         // ------------------------------------------------------------- checking
@@ -228,6 +227,7 @@ namespace SteamScreenshotBackup
         {
             int n = CheckedItems().Count;
             _resync.Text = n > 0 ? $"Re-Sync Selected ({n})" : "Re-Sync Selected";
+            _resync.Enabled = !_busy && n > 0;
         }
 
         // ------------------------------------------------------------- re-syncing
@@ -283,6 +283,7 @@ namespace SteamScreenshotBackup
             _busy = busy;
             _rescan.Enabled = !busy;
             _selectAll.Enabled = !busy;
+            UpdateResyncButton();
         }
     }
 }
