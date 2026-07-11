@@ -299,17 +299,18 @@ comfortable, or build from source (above) if you'd rather not.
 recurring expense for a free hobby project. The source is public if you want
 to verify or build it yourself instead of trusting the download.
 
-**Is it actually safe? Antivirus/VirusTotal?** The v3.11.0
-[installer](https://www.virustotal.com/gui/file/d4ce1eefc67f845e9def2ec54da8603df080d46e260c0679b725c3f2e917bda9/summary)
-(0/66) and
-[portable](https://www.virustotal.com/gui/file/e65f851a2d5d8496f9fccd869458806b9c0698e18e3ccb0c286306ce0f7d32c1/summary)
-(0/67) downloads scan clean on VirusTotal. The
-[offline portable](https://www.virustotal.com/gui/file/4110aa5eab2aa868ab51111f959aee622a54f376cb8e7fdf1e869daae957cdce/summary)
-build gets one flag (1/67, Zillya: "Tool.BroHack.Win64.104") - a generic
-heuristic that self-contained single-file .NET executables trip on
-occasionally (it hit the plain portable build back in v3.9.2 the same way);
-every other engine, including the ones that actually do behavioral analysis,
-reports it clean.
+**Is it actually safe? Antivirus/VirusTotal?** The v3.11.3
+[installer](https://www.virustotal.com/gui/file/b9509366ccba0afd8058b0a9bc761a3780029ea05feb8a77220876a8383cd2ca/summary)
+scans clean (0/67). The
+[portable](https://www.virustotal.com/gui/file/239c1878e51ddf11643833f0be7e2d7b8aea2370618cf5057687c695bac2d984/summary)
+(2/68) and
+[offline portable](https://www.virustotal.com/gui/file/5e3f9d840fa204458ffe1bd15ccd3661d2e2fdd30cbdb0ca4c68e9b29142396e/summary)
+(1/68) builds each get flagged by Bkav ("W32.Malware.*") and, on the plain
+portable, also Zillya ("Tool.BroHack.Win64.104") - generic heuristics that
+self-contained single-file .NET executables trip on occasionally (Zillya
+hit the same build this way back in v3.9.2 and v3.11.0 too); every engine
+that actually does behavioral analysis (Defender, ESET, BitDefender,
+Malwarebytes, Kaspersky, etc.) reports both clean.
 
 **Does this upload my screenshots anywhere? Does it phone home?** No screenshot
 data, ever - see [What it does with your files](#what-it-does-with-your-files).
