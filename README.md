@@ -299,15 +299,16 @@ comfortable, or build from source (above) if you'd rather not.
 recurring expense for a free hobby project. The source is public if you want
 to verify or build it yourself instead of trusting the download.
 
-**Is it actually safe? Antivirus/VirusTotal?** The v3.11.4
-[installer](https://www.virustotal.com/gui/file/c936c771a08860c6fe46bb9f61a3e20590189a403766493d7488d2c7e9b26cf1/summary)
+**Is it actually safe? Antivirus/VirusTotal?** The v3.11.5
+[installer](https://www.virustotal.com/gui/file/ce0adb58afd6161fcbc93ad247669bc29eb71a7497f5bc267f9df122836bde41/summary)
 scans clean (0/69). The
-[portable](https://www.virustotal.com/gui/file/b6c34deb1136ca5a3a24036f36a774a4f3deb5e4b474487e1f60c0c5c1dcdc5d/summary)
-(1/65) and
-[offline portable](https://www.virustotal.com/gui/file/1fc9b98f7550573f5ce97d808397a05752fcb7306e93e6608093192b7bf66556/summary)
-(1/68) builds each get flagged only by Bkav ("W32.Malware.*") - a generic
-heuristic that self-contained single-file .NET executables trip on
-occasionally; every engine that actually does behavioral analysis
+[portable](https://www.virustotal.com/gui/file/53bc88b2f589e7f5d38ddb3b3694eb4e233c22bf76c00e194bd01daba8bebb46/summary)
+and
+[offline portable](https://www.virustotal.com/gui/file/2443761f97b66e75f1d73908318580b9a75e73e8b390a824e125d1ee2d2c7753/summary)
+builds (1/67 each) get flagged only by Zillya ("Tool.BroHack.Win64.104") -
+a generic heuristic that self-contained single-file .NET executables trip
+on occasionally (it hit the same build this way back in v3.9.2 and
+v3.11.0 too); every engine that actually does behavioral analysis
 (Defender, ESET, BitDefender, Malwarebytes, Kaspersky, etc.) reports both
 clean.
 
