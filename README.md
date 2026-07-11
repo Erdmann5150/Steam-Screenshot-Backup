@@ -304,18 +304,22 @@ comfortable, or build from source (above) if you'd rather not.
 recurring expense for a free hobby project. The source is public if you want
 to verify or build it yourself instead of trusting the download.
 
-**Is it actually safe? Antivirus/VirusTotal?** The v3.11.6
-[installer](https://www.virustotal.com/gui/file/b7d99165db2230e2603ab36bfee8bb2b5253a57744197196ef8aec5bd6e71400/summary)
+**Is it actually safe? Antivirus/VirusTotal?** The v3.11.7
+[installer](https://www.virustotal.com/gui/file/33c2d2be66fe52c7d260468ef227c476b28ac4f8e81ea7c34e721bf5b428c90b/summary)
 scans clean (0/68). The
-[portable](https://www.virustotal.com/gui/file/78aa89872483dbbc3bcc0fea6c5bdb81cb3189b3817b3c6d2c5cc183bd682888/summary)
-(1/67) and
-[offline portable](https://www.virustotal.com/gui/file/1f163ac6eb62af11eafede853abb0f617c3d331ee29749415e434d25c3c77b15/summary)
-(1/68) builds get flagged only by Zillya ("Tool.BroHack.Win64.104") -
-a generic heuristic that self-contained single-file .NET executables trip
-on occasionally (it hit the same build this way back in v3.9.2 and
-v3.11.0 too); every engine that actually does behavioral analysis
-(Defender, ESET, BitDefender, Malwarebytes, Kaspersky, etc.) reports both
-clean.
+[portable](https://www.virustotal.com/gui/file/8ca90ee4c000dd5c5aa408a6db454a706632afa7ff1a4d68164b235b04639364/summary)
+(2/68) and
+[offline portable](https://www.virustotal.com/gui/file/afbe15adc5bb2b346b3aa318b3868124ec132114b58f08dcb884cb7e7ac9a29e/summary)
+(1/67) builds get flagged by Zillya ("Tool.BroHack.Win64.104") - a generic
+heuristic that self-contained single-file .NET executables trip on
+occasionally (it hit the same build this way back in v3.9.2 and v3.11.0
+too) - and the portable build also picks up a new one this release,
+Gridinsoft ("Trojan.Win64.Agent.oa!s1"), the same generic label on both
+self-contained builds and nothing on the installer (a different packer
+entirely), which points at the `PublishSingleFile` packing tripping a
+heuristic rather than an actual finding. Every engine that does real
+behavioral analysis (Defender, ESET, BitDefender, Malwarebytes, Kaspersky,
+etc.) reports all three clean.
 
 **Does this upload my screenshots anywhere? Does it phone home?** No screenshot
 data, ever - see [What it does with your files](#what-it-does-with-your-files).
