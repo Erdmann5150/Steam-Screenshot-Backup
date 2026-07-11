@@ -15,6 +15,7 @@ namespace SteamScreenshotBackup
         private readonly AppNameResolver _resolver;
         private readonly DataGridView _grid;
         private readonly HashSet<string> _unresolvedIds = new HashSet<string>();
+        private HashSet<(string Id, string Name)> _baselineRows;
 
         public GameNamesWindow(BackupEngine engine)
         {
@@ -140,7 +141,8 @@ namespace SteamScreenshotBackup
             {
                 Text = "Save",
                 Size = new Size(96, 32),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Enabled = false
             };
             save.Location = new Point(footer.Width - 96 - 14 - 96 - 10, 12);
             Theme.StyleButton(save, primary: true);
@@ -152,6 +154,37 @@ namespace SteamScreenshotBackup
             Controls.Add(footerEdge);
             Controls.Add(footer);
             CancelButton = close;
+
+            // Grid content at load, so Save can gray itself out until a row actually
+            // differs from what's on disk (typed name, added row, removed row).
+            _baselineRows = SnapshotRows();
+            void UpdateSaveButton() => save.Enabled = !SnapshotRows().SetEquals(_baselineRows);
+            _grid.CellValueChanged += (s, e) => UpdateSaveButton();
+            _grid.RowsAdded += (s, e) => UpdateSaveButton();
+            _grid.RowsRemoved += (s, e) => UpdateSaveButton();
+
+            // CellValueChanged only fires once an edit commits (focus leaves the cell),
+            // so force that commit on every keystroke instead of waiting for Tab/Enter.
+            _grid.CurrentCellDirtyStateChanged += (s, e) =>
+            {
+                if (_grid.IsCurrentCellDirty) _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            };
+        }
+
+        // One (id, name) pair per real (non-template) row, so two grid states can be
+        // compared for equality regardless of row order.
+        private HashSet<(string Id, string Name)> SnapshotRows()
+        {
+            var set = new HashSet<(string, string)>();
+            foreach (DataGridViewRow row in _grid.Rows)
+            {
+                if (row.IsNewRow) continue;
+                string id = (row.Cells[0].Value?.ToString() ?? "").Trim();
+                string name = (row.Cells[1].Value?.ToString() ?? "").Trim();
+                if (id.Length == 0 && name.Length == 0) continue;
+                set.Add((id, name));
+            }
+            return set;
         }
 
         private void OpenFolder(string path)

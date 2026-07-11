@@ -37,6 +37,19 @@ namespace SteamScreenshotBackup
         // Tab state.
         private readonly Panel _generalPage, _backupPage, _indicator;
         private readonly Button _tabGeneral, _tabBackup;
+        private readonly Button _apply;
+
+        // Snapshot of every field's last-applied value, refreshed after each successful
+        // Apply. Compared against current control state so Apply can gray itself out
+        // once there's nothing left to save.
+        private string _baseDest, _baseHighResOverride, _baseTemplate;
+        private bool _baseStandard, _baseHighRes, _baseAutoStart, _baseAutoRestore,
+                     _baseDeleteOriginals, _baseShowNotifications, _baseMarkdownIndex,
+                     _basePreviewImport, _baseOfflineMode;
+#if !OFFLINE_ONLY
+        private bool _baseCheckForUpdates;
+#endif
+        private ThemeMode _baseTheme;
 
         public SettingsWindow(TrayContext app, Settings settings)
         {
@@ -78,16 +91,17 @@ namespace SteamScreenshotBackup
             // Apply saves in the background and leaves the window open, so the user can
             // keep adjusting settings and see the effect of each change without having
             // to reopen the window.
-            var apply = new Button
+            _apply = new Button
             {
                 Text = "Apply",
                 Size = new Size(96, 32),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Enabled = false
             };
-            apply.Location = new Point(footer.Width - 96 - 14 - 96 - 10, 13);
-            Theme.StyleButton(apply, primary: true);
-            apply.Click += (s, e) => SaveChanges();
-            footer.Controls.Add(apply);
+            _apply.Location = new Point(footer.Width - 96 - 14 - 96 - 10, 13);
+            Theme.StyleButton(_apply, primary: true);
+            _apply.Click += (s, e) => SaveChanges();
+            footer.Controls.Add(_apply);
 
             // ----- content host + two pages -----
             var contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
@@ -334,7 +348,7 @@ namespace SteamScreenshotBackup
             Controls.Add(tabEdge);
             Controls.Add(tabBar);
 
-            AcceptButton = apply;
+            AcceptButton = _apply;
             CancelButton = close;
 
             // Size the window so the taller page shows without scrolling.
@@ -343,6 +357,89 @@ namespace SteamScreenshotBackup
 
             SelectTab(0);
             ActiveControl = focusCatcher;
+
+            CaptureBaseline();
+            WireDirtyTracking();
+        }
+
+        // Snapshots every field's currently-applied value. Called once at load and again
+        // after each successful Apply, since Apply saves without closing the window.
+        private void CaptureBaseline()
+        {
+            _baseDest = _dest.Text.Trim();
+            _baseHighResOverride = _highResFolder.Text.Trim();
+            _baseTemplate = LayoutPresets[_layout.SelectedIndex].Template;
+            _baseStandard = _standard.Checked;
+            _baseHighRes = _highRes.Checked;
+            _baseAutoStart = _autoStart.Checked;
+            _baseAutoRestore = _autoRestore.Checked;
+            _baseDeleteOriginals = _deleteOriginals.Checked;
+            _baseShowNotifications = _showNotifications.Checked;
+            _baseMarkdownIndex = _markdownIndex.Checked;
+            _basePreviewImport = _previewImport.Checked;
+            _baseOfflineMode = _offlineMode.Checked;
+#if !OFFLINE_ONLY
+            _baseCheckForUpdates = _checkForUpdates.Checked;
+#endif
+            _baseTheme = _theme.SelectedIndex switch
+            {
+                1 => ThemeMode.Light,
+                2 => ThemeMode.System,
+                _ => ThemeMode.Dark
+            };
+        }
+
+        private bool IsDirty()
+        {
+            ThemeMode currentTheme = _theme.SelectedIndex switch
+            {
+                1 => ThemeMode.Light,
+                2 => ThemeMode.System,
+                _ => ThemeMode.Dark
+            };
+            bool dirty =
+                !string.Equals(_dest.Text.Trim(), _baseDest, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(_highResFolder.Text.Trim(), _baseHighResOverride, StringComparison.OrdinalIgnoreCase) ||
+                LayoutPresets[_layout.SelectedIndex].Template != _baseTemplate ||
+                _standard.Checked != _baseStandard ||
+                _highRes.Checked != _baseHighRes ||
+                _autoStart.Checked != _baseAutoStart ||
+                _autoRestore.Checked != _baseAutoRestore ||
+                _deleteOriginals.Checked != _baseDeleteOriginals ||
+                _showNotifications.Checked != _baseShowNotifications ||
+                _markdownIndex.Checked != _baseMarkdownIndex ||
+                _previewImport.Checked != _basePreviewImport ||
+                _offlineMode.Checked != _baseOfflineMode ||
+                currentTheme != _baseTheme;
+#if !OFFLINE_ONLY
+            dirty = dirty || _checkForUpdates.Checked != _baseCheckForUpdates;
+#endif
+            return dirty;
+        }
+
+        private void UpdateApplyButton() => _apply.Enabled = IsDirty();
+
+        // Every field that can be changed gets a listener that re-checks dirty state,
+        // so Apply lights up the moment something differs from the last-applied values
+        // and grays back out once it matches again (e.g. toggling a checkbox back off).
+        private void WireDirtyTracking()
+        {
+            _dest.TextChanged += (s, e) => UpdateApplyButton();
+            _highResFolder.TextChanged += (s, e) => UpdateApplyButton();
+            _layout.SelectedIndexChanged += (s, e) => UpdateApplyButton();
+            _theme.SelectedIndexChanged += (s, e) => UpdateApplyButton();
+            _standard.CheckedChanged += (s, e) => UpdateApplyButton();
+            _highRes.CheckedChanged += (s, e) => UpdateApplyButton();
+            _autoStart.CheckedChanged += (s, e) => UpdateApplyButton();
+            _autoRestore.CheckedChanged += (s, e) => UpdateApplyButton();
+            _deleteOriginals.CheckedChanged += (s, e) => UpdateApplyButton();
+            _showNotifications.CheckedChanged += (s, e) => UpdateApplyButton();
+            _markdownIndex.CheckedChanged += (s, e) => UpdateApplyButton();
+            _previewImport.CheckedChanged += (s, e) => UpdateApplyButton();
+            _offlineMode.CheckedChanged += (s, e) => UpdateApplyButton();
+#if !OFFLINE_ONLY
+            _checkForUpdates.CheckedChanged += (s, e) => UpdateApplyButton();
+#endif
         }
 
         private Button MakeTab(string text, int x, int width)
@@ -621,6 +718,9 @@ namespace SteamScreenshotBackup
             _settings.Save();
             Theme.SetMode(_settings.Theme);
             _app.OnSettingsChanged(destChanged || typesChanged || overrideChanged);
+
+            CaptureBaseline();
+            UpdateApplyButton();
 
             // Turned a screenshot type off: offer to remove its now-unwanted backups.
             if (standardTurnedOff && TypeBackupExists(ScreenshotType.Standard) && MessageDialog.AskYesNo(
