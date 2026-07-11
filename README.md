@@ -299,18 +299,17 @@ comfortable, or build from source (above) if you'd rather not.
 recurring expense for a free hobby project. The source is public if you want
 to verify or build it yourself instead of trusting the download.
 
-**Is it actually safe? Antivirus/VirusTotal?** The v3.11.3
-[installer](https://www.virustotal.com/gui/file/b9509366ccba0afd8058b0a9bc761a3780029ea05feb8a77220876a8383cd2ca/summary)
-scans clean (0/67). The
-[portable](https://www.virustotal.com/gui/file/239c1878e51ddf11643833f0be7e2d7b8aea2370618cf5057687c695bac2d984/summary)
-(2/68) and
-[offline portable](https://www.virustotal.com/gui/file/5e3f9d840fa204458ffe1bd15ccd3661d2e2fdd30cbdb0ca4c68e9b29142396e/summary)
-(1/68) builds each get flagged by Bkav ("W32.Malware.*") and, on the plain
-portable, also Zillya ("Tool.BroHack.Win64.104") - generic heuristics that
-self-contained single-file .NET executables trip on occasionally (Zillya
-hit the same build this way back in v3.9.2 and v3.11.0 too); every engine
-that actually does behavioral analysis (Defender, ESET, BitDefender,
-Malwarebytes, Kaspersky, etc.) reports both clean.
+**Is it actually safe? Antivirus/VirusTotal?** The v3.11.4
+[installer](https://www.virustotal.com/gui/file/c936c771a08860c6fe46bb9f61a3e20590189a403766493d7488d2c7e9b26cf1/summary)
+scans clean (0/69). The
+[portable](https://www.virustotal.com/gui/file/b6c34deb1136ca5a3a24036f36a774a4f3deb5e4b474487e1f60c0c5c1dcdc5d/summary)
+(1/65) and
+[offline portable](https://www.virustotal.com/gui/file/1fc9b98f7550573f5ce97d808397a05752fcb7306e93e6608093192b7bf66556/summary)
+(1/68) builds each get flagged only by Bkav ("W32.Malware.*") - a generic
+heuristic that self-contained single-file .NET executables trip on
+occasionally; every engine that actually does behavioral analysis
+(Defender, ESET, BitDefender, Malwarebytes, Kaspersky, etc.) reports both
+clean.
 
 **Does this upload my screenshots anywhere? Does it phone home?** No screenshot
 data, ever - see [What it does with your files](#what-it-does-with-your-files).
