@@ -488,7 +488,7 @@ namespace SteamScreenshotBackup
             2 => e.Level == LogLevel.Restore,
             3 => e.Level == LogLevel.Deletion,
             4 => e.Level == LogLevel.Warning || e.Level == LogLevel.Error,
-            5 => e.Level == LogLevel.Info,
+            5 => e.Level == LogLevel.Info || e.Level == LogLevel.Update,
             _ => true
         };
 
@@ -521,6 +521,7 @@ namespace SteamScreenshotBackup
                 LogLevel.Deletion => "Deletion",
                 LogLevel.Warning => "Warning",
                 LogLevel.Error => "Error",
+                LogLevel.Update => "Update",
                 _ => "Info"
             };
             var item = new ListViewItem(e.Time.ToString("yyyy-MM-dd HH:mm:ss")) { Tag = e };
@@ -549,6 +550,7 @@ namespace SteamScreenshotBackup
             LogLevel.Deletion => Theme.Warning,
             LogLevel.Warning => Theme.Warning,
             LogLevel.Error => Theme.Error,
+            LogLevel.Update => Theme.Accent,
             _ => Theme.TextDim
         };
 

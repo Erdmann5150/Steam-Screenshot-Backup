@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace SteamScreenshotBackup
 {
-    internal enum LogLevel { Info, Backup, Restore, Deletion, Warning, Error }
+    internal enum LogLevel { Info, Backup, Restore, Deletion, Warning, Error, Update }
 
     internal class LogEntry
     {
@@ -51,6 +51,7 @@ namespace SteamScreenshotBackup
         public static void Backup(string message, string filePath) => Write(LogLevel.Backup, message, filePath);
         public static void Restore(string message, string filePath) => Write(LogLevel.Restore, message, filePath);
         public static void Deletion(string message, string filePath) => Write(LogLevel.Deletion, message, filePath);
+        public static void UpdateAvailable(string message) => Write(LogLevel.Update, message);
 
         public static LogEntry[] Snapshot()
         {

@@ -264,7 +264,7 @@ namespace SteamScreenshotBackup
 
             _settings.LastNotifiedUpdateVersion = info.Version;
             _settings.Save();
-            Logger.Log($"Update available: version {info.Version} (currently running {UpdateChecker.CurrentVersion}).");
+            Logger.UpdateAvailable($"Update available: version {info.Version} (currently running {UpdateChecker.CurrentVersion}).");
             Notify(6000,
                 $"Version {info.Version} is available \u2014 use \"Check for Updates Now\" to view it.",
                 ToolTipIcon.Info);

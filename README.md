@@ -105,8 +105,9 @@ Steam Screenshots/
 - **Update checks.** Optionally checks this project's GitHub releases once a
   day and lets you know if a newer version is out (a Settings toggle or an
   installer checkbox to turn it off), plus a manual **Check for Updates Now**
-  button in the tray menu and Utilities. Off automatically in Offline mode,
-  and not present at all in the offline-only portable build.
+  button in the tray menu and Utilities. Off automatically in Offline mode
+  (its checkbox grays out in both Settings and the installer to make that
+  clear), and not present at all in the offline-only portable build.
 - **Dark and light themes**, or follow the Windows setting.
 - **Statistics**: total games, screenshots, and data, plus per-session counters.
 

@@ -1,10 +1,10 @@
 ; Inno Setup script for Steam Screenshot Backup.
 ; Build with build.ps1 at the repository root (it publishes the exe first and
 ; passes the version in), or manually:
-;   ISCC.exe setup.iss /DAppVersion=3.11.2 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
+;   ISCC.exe setup.iss /DAppVersion=3.11.3 /DPublishDir=..\app\bin\Release\net8.0-windows\win-x64\publish
 
 #ifndef AppVersion
-  #define AppVersion "3.11.2"
+  #define AppVersion "3.11.3"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\app\bin\Release\net8.0-windows\win-x64\publish"
@@ -107,6 +107,7 @@ const
 
 var
   IsDarkTheme: Boolean;
+  TaskIndexOfflineMode, TaskIndexNoUpdateCheck: Integer;
 
 procedure ApplyThemeTo(C: TControl; Dark: Boolean; Bg, Panel, Txt: TColor);
 var
@@ -149,15 +150,57 @@ begin
   DwmSetWindowAttribute(WizardForm.Handle, 20, v, SizeOf(v));   // dark/light title bar
 end;
 
+function FindTaskIndex(const Desc: String): Integer;
+var
+  i: Integer;
+begin
+  Result := -1;
+  for i := 0 to WizardForm.TasksList.Items.Count - 1 do
+    if WizardForm.TasksList.Items[i] = Desc then begin
+      Result := i;
+      Exit;
+    end;
+end;
+
+// Offline mode already skips update checks at runtime (see TrayContext), so
+// force "Turn off automatic update checks" on and gray it out to match -
+// same reasoning as Settings' _checkForUpdates.Enabled wiring.
+procedure SyncUpdateCheckTask;
+begin
+  if (TaskIndexOfflineMode < 0) or (TaskIndexNoUpdateCheck < 0) then Exit;
+  if WizardForm.TasksList.Checked[TaskIndexOfflineMode] then begin
+    WizardForm.TasksList.Checked[TaskIndexNoUpdateCheck] := True;
+    WizardForm.TasksList.ItemEnabled[TaskIndexNoUpdateCheck] := False;
+  end else
+    WizardForm.TasksList.ItemEnabled[TaskIndexNoUpdateCheck] := True;
+end;
+
+procedure TasksListClickCheck(Sender: TObject);
+begin
+  SyncUpdateCheckTask;
+end;
+
 procedure InitializeWizard;
 begin
   IsDarkTheme := True;   // installer defaults to dark mode, matching the app
   ApplyTheme;
+  TaskIndexOfflineMode := -1;
+  TaskIndexNoUpdateCheck := -1;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
   ApplyTheme;   // re-theme controls created per page
+
+  // TasksList isn't populated with items until its page is actually reached,
+  // so the index lookup can't happen any earlier than this (InitializeWizard
+  // is too soon - Items.Count is still 0 there).
+  if (CurPageID = wpSelectTasks) and (TaskIndexOfflineMode < 0) then begin
+    TaskIndexOfflineMode := FindTaskIndex('Offline mode: never contact Steam''s servers for game names');
+    TaskIndexNoUpdateCheck := FindTaskIndex('Turn off automatic update checks');
+    WizardForm.TasksList.OnClickCheck := @TasksListClickCheck;
+    SyncUpdateCheckTask;
+  end;
 end;
 
 // Stop a running instance before installing over it.

@@ -212,6 +212,11 @@ namespace SteamScreenshotBackup
             Hint("A read-only check against this project's GitHub releases page \u2014 no data\n" +
                  "about you or your files is sent, just a request for the latest version number.");
             y += 44;
+
+            // Offline mode already skips update checks at runtime (see TrayContext);
+            // gray this out too so the UI doesn't imply it does something on its own.
+            _checkForUpdates.Enabled = !_offlineMode.Checked;
+            _offlineMode.CheckedChanged += (s, e) => _checkForUpdates.Enabled = !_offlineMode.Checked;
 #endif
             int generalBottom = y;
 
