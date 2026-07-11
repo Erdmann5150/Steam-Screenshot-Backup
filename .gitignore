@@ -15,3 +15,7 @@ desktop.ini
 
 # Private Claude Code workflow notes (kept local, not published)
 CLAUDE.md
+
+# Private dev tool: regenerates docs/img screenshots. Touches real app settings
+# paths (backed up/restored automatically) - kept local, not part of the project.
+tools/screenshot-harness/

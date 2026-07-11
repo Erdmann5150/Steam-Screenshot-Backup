@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>SteamScreenshotBackup</AssemblyName>
     <RootNamespace>SteamScreenshotBackup</RootNamespace>
-    <Version>3.11.6</Version>
+    <Version>3.11.7</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Product>Steam Screenshot Backup</Product>
     <AssemblyTitle>Steam Screenshot Backup</AssemblyTitle>

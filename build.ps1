@@ -22,6 +22,15 @@ $root = $PSScriptRoot
 $running = Get-Process SteamScreenshotBackup -ErrorAction SilentlyContinue
 if ($running) { throw "Stop any running SteamScreenshotBackup instance first" }
 
+# ASCII-only source check (see CLAUDE.md) - catches mojibake before it ships.
+& (Join-Path $root 'tools\Test-AsciiOnly.ps1')
+if ($LASTEXITCODE -ne 0) { throw "ASCII check failed - fix non-ASCII characters before building" }
+
+# Run the test suite - never ship a build with failing tests.
+Write-Host "Running tests..." -ForegroundColor Cyan
+dotnet test (Join-Path $root 'SteamScreenshotBackup.sln') -c Release --nologo
+if ($LASTEXITCODE -ne 0) { throw "Tests failed - fix before building a release" }
+
 # Version comes from the csproj so it only lives in one place.
 $csproj = Join-Path $root 'app\SteamScreenshotBackup.csproj'
 $version = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version

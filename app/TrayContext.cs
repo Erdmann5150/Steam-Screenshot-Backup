@@ -96,11 +96,11 @@ namespace SteamScreenshotBackup
             _settings.Save();
 
             _engine.RestoreNeeded += () => RunScan(RunKind.Restore);
-            _engine.DestinationOffline += () => Notify(5000,
+            _engine.DestinationOffline += () => Notify(5000, "Backup Paused",
                 "Backup folder is unreachable \u2014 backups will resume automatically when it returns.",
                 ToolTipIcon.Warning);
             _engine.DestinationOnline += () => RunScan(RunKind.Startup);
-            _engine.UnresolvedGameFound += count => Notify(6000,
+            _engine.UnresolvedGameFound += count => Notify(6000, "Game Names Needed",
                 $"{count} game folder{(count == 1 ? "" : "s")} could not be named automatically \u2014 " +
                 "open Game Names to identify " + (count == 1 ? "it" : "them") + ".",
                 ToolTipIcon.Info);
@@ -128,10 +128,13 @@ namespace SteamScreenshotBackup
         }
 
         // Central gate for tray popups so the "show notifications" setting is honored.
-        private void Notify(int ms, string text, ToolTipIcon icon)
+        // Windows' own toast chrome already shows the app name/icon, so the title here
+        // should be a short, specific header - never repeat "Steam Screenshot Backup"
+        // or restate what the body text already says.
+        private void Notify(int ms, string title, string text, ToolTipIcon icon)
         {
             if (!_settings.ShowNotifications) return;
-            OnUi(() => _tray.ShowBalloonTip(ms, AppName, text, icon));
+            OnUi(() => _tray.ShowBalloonTip(ms, title, text, icon));
         }
 
         private void FirstRun()
@@ -266,7 +269,7 @@ namespace SteamScreenshotBackup
             _settings.LastNotifiedUpdateVersion = info.Version;
             _settings.Save();
             Logger.UpdateAvailable($"Update available: version {info.Version} (currently running {UpdateChecker.CurrentVersion}).");
-            Notify(6000,
+            Notify(6000, "Update Available",
                 $"Version {info.Version} is available \u2014 use \"Check for Updates Now\" to view it.",
                 ToolTipIcon.Info);
         }
@@ -311,7 +314,7 @@ namespace SteamScreenshotBackup
                     if (run == null)
                     {
                         if (kind == RunKind.Manual)
-                            Notify(4000, "Backup folder is currently unreachable.", ToolTipIcon.Warning);
+                            Notify(4000, "Backup Unreachable", "The backup folder is currently unreachable.", ToolTipIcon.Warning);
                         return;
                     }
 
@@ -320,7 +323,7 @@ namespace SteamScreenshotBackup
                 catch (Exception ex)
                 {
                     Logger.Error("Scan failed: " + ex.Message);
-                    Notify(4000, "Backup scan failed \u2014 open the app for details.", ToolTipIcon.Error);
+                    Notify(4000, "Backup Failed", "Open the app for details.", ToolTipIcon.Error);
                 }
             });
         }
@@ -336,23 +339,24 @@ namespace SteamScreenshotBackup
             {
                 Logger.Log($"{(kind == RunKind.Restore ? "Restore" : "Backup")} run complete: " +
                            $"{n} {verb} file{(n == 1 ? "" : "s")} across {games} game{(games == 1 ? "" : "s")}.");
+                string title = kind == RunKind.Restore ? "Restore Complete" : "Backup Complete";
                 string text = kind == RunKind.Restore
                     ? $"Restored {n} screenshot{(n == 1 ? "" : "s")} across {games} game{(games == 1 ? "" : "s")}."
-                    : $"Backed up {n} new screenshot{(n == 1 ? "" : "s")} from {games} game{(games == 1 ? "" : "s")}.";
-                Notify(4000, text, ToolTipIcon.Info);
+                    : $"{n} new screenshot{(n == 1 ? "" : "s")} from {games} game{(games == 1 ? "" : "s")}.";
+                Notify(4000, title, text, ToolTipIcon.Info);
             }
             else if (kind == RunKind.Restore)
             {
                 Logger.Warn("Deleted backup files could not be restored - they no longer exist " +
                             "in Steam's screenshot folders.");
-                Notify(5000, "Deleted files could not be restored \u2014 they no longer exist in Steam.",
+                Notify(5000, "Restore Failed", "Deleted files no longer exist in Steam.",
                     ToolTipIcon.Warning);
             }
             else
             {
                 Logger.Log("Backup run complete: nothing new to copy.");
                 if (kind == RunKind.Manual)
-                    Notify(3000, "Everything is already backed up.", ToolTipIcon.Info);
+                    Notify(3000, "Up to Date", "Everything is already backed up.", ToolTipIcon.Info);
             }
         }
 
