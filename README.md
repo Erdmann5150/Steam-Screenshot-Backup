@@ -1,5 +1,8 @@
 # Steam Screenshot Backup
 
+[![Build and test](https://github.com/Erdmann5150/Steam-Screenshot-Backup/actions/workflows/build.yml/badge.svg)](https://github.com/Erdmann5150/Steam-Screenshot-Backup/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Steam stores screenshots in `userdata\<id>\760\remote\<appid>\screenshots` under
 names like `20260706210532_1.jpg`, grouped by numeric app ID instead of game
 name. The uncompressed "external copy" files (from Steam's *"Save an external
