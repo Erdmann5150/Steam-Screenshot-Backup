@@ -1,0 +1,285 @@
+#!/usr/bin/env bash
+#
+# Steam Screenshot Backup - installer for Bazzite and other Linux desktops.
+#
+# Installs entirely inside your home directory:
+#   ~/.local/share/steam-screenshot-backup/   the app and its private venv
+#   ~/.local/bin/steam-screenshot-backup      the launcher
+#   ~/.local/share/applications/...desktop    the app-menu entry
+#   ~/.config/autostart/...desktop            optional start-on-login
+#
+# No root, no rpm-ostree layering, no reboot - which means it survives Bazzite
+# image updates untouched. Re-run it any time to upgrade in place; your
+# settings, game-name list and backed-up screenshots are never touched.
+
+set -euo pipefail
+
+APP_ID="steam-screenshot-backup"
+APP_NAME="Steam Screenshot Backup"
+
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+INSTALL_DIR="$DATA_HOME/$APP_ID"
+VENV_DIR="$INSTALL_DIR/venv"
+APP_DIR="$INSTALL_DIR/app"
+BIN_DIR="$HOME/.local/bin"
+LAUNCHER="$BIN_DIR/$APP_ID"
+DESKTOP_DIR="$DATA_HOME/applications"
+ICON_DIR="$DATA_HOME/icons/hicolor/scalable/apps"
+AUTOSTART_DIR="$CONFIG_HOME/autostart"
+
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+AUTOSTART=ask
+RUN_AFTER=ask
+
+usage() {
+    cat <<EOF
+$APP_NAME installer
+
+  ./install.sh [options]
+
+Options:
+  --autostart        enable start-on-login without asking
+  --no-autostart     do not enable start-on-login
+  --run              launch the app when the install finishes
+  --no-run           do not launch it
+  --yes, -y          accept the defaults for everything (autostart on, run on)
+  --help, -h         show this message
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --autostart)    AUTOSTART=yes ;;
+        --no-autostart) AUTOSTART=no ;;
+        --run)          RUN_AFTER=yes ;;
+        --no-run)       RUN_AFTER=no ;;
+        -y|--yes)       AUTOSTART=yes; RUN_AFTER=yes ;;
+        -h|--help)      usage; exit 0 ;;
+        *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+done
+
+say()  { printf '  %s\n' "$*"; }
+step() { printf '\n==> %s\n' "$*"; }
+die()  { printf '\nError: %s\n' "$*" >&2; exit 1; }
+
+# --------------------------------------------------------------- sanity checks
+
+step "Checking prerequisites"
+
+[ -f "$SOURCE_DIR/ssbackup/__main__.py" ] \
+    || die "Run this from the folder that contains the 'ssbackup' directory."
+
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON=python3
+else
+    die "python3 was not found. Bazzite ships it; on other distros install Python 3.10 or newer."
+fi
+
+PY_VERSION="$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+"$PYTHON" - <<'PYEOF' || die "Python 3.10 or newer is required (found $PY_VERSION)."
+import sys
+sys.exit(0 if sys.version_info >= (3, 10) else 1)
+PYEOF
+say "Python $PY_VERSION"
+
+"$PYTHON" -c 'import venv' 2>/dev/null \
+    || die "Python's venv module is missing. On Fedora/Bazzite: 'rpm-ostree install python3-libs', or use a distrobox."
+
+case "$(uname -m)" in
+    x86_64|aarch64) say "Architecture: $(uname -m)" ;;
+    *) say "Warning: $(uname -m) is unusual; PySide6 may not have a prebuilt wheel." ;;
+esac
+
+if [ -n "${XDG_CURRENT_DESKTOP:-}" ]; then
+    say "Desktop: $XDG_CURRENT_DESKTOP"
+    case "$XDG_CURRENT_DESKTOP" in
+        *GNOME*)
+            say "Note: GNOME hides tray icons unless the AppIndicator extension is"
+            say "      installed and enabled. KDE Plasma (Bazzite's default) works as-is." ;;
+    esac
+fi
+
+# ------------------------------------------------------------------- install
+
+step "Installing to $INSTALL_DIR"
+
+mkdir -p "$APP_DIR" "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
+
+# Replace the app payload wholesale so a removed file in a new version does not
+# linger, while leaving the venv (expensive to rebuild) in place.
+rm -rf "${APP_DIR:?}/ssbackup"
+cp -r "$SOURCE_DIR/ssbackup" "$APP_DIR/ssbackup"
+find "$APP_DIR" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+say "Application files copied"
+
+if [ -d "$VENV_DIR" ] && [ -x "$VENV_DIR/bin/python" ]; then
+    say "Reusing the existing virtual environment"
+else
+    say "Creating a virtual environment (this part takes a moment)"
+    rm -rf "$VENV_DIR"
+    "$PYTHON" -m venv "$VENV_DIR" || die "Could not create the virtual environment."
+fi
+
+step "Installing dependencies"
+say "Downloading PySide6 and friends - roughly 90 MB, so give it a minute"
+"$VENV_DIR/bin/python" -m pip install --upgrade pip --quiet \
+    || say "Warning: pip could not update itself; continuing."
+if ! "$VENV_DIR/bin/python" -m pip install --quiet \
+        "PySide6-Essentials>=6.6" "watchdog>=3.0" "Send2Trash>=1.8"; then
+    die "Dependency installation failed. Check your network connection and try again."
+fi
+say "Dependencies installed"
+
+# -------------------------------------------------------------- launcher
+
+step "Creating the launcher"
+
+cat > "$LAUNCHER" <<EOF
+#!/usr/bin/env bash
+# Launcher for $APP_NAME. Generated by install.sh - edits will be overwritten.
+# Running from the install directory keeps the app's own package first on
+# sys.path, so nothing in whatever folder you happen to be in can shadow it.
+cd "$APP_DIR" || exit 1
+exec "$VENV_DIR/bin/python" -m ssbackup "\$@"
+EOF
+chmod 755 "$LAUNCHER"
+say "$LAUNCHER"
+
+if ! printf '%s' ":$PATH:" | grep -q ":$BIN_DIR:"; then
+    say "Note: $BIN_DIR is not on your PATH, so the 'steam-screenshot-backup'"
+    say "      command will not work until you add it. The app-menu entry works regardless."
+fi
+
+# ----------------------------------------------------------------- icon
+
+cat > "$ICON_DIR/$APP_ID.svg" <<'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect x="4" y="18" width="56" height="38" rx="6" fill="#66c0f4"/>
+  <rect x="20" y="10" width="24" height="12" rx="3" fill="#66c0f4"/>
+  <circle cx="32" cy="36" r="10" fill="#16202d"/>
+  <circle cx="32" cy="36" r="5" fill="#66c0f4"/>
+</svg>
+EOF
+say "Icon installed"
+
+# --------------------------------------------------------- desktop entry
+
+cat > "$DESKTOP_DIR/$APP_ID.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$APP_NAME
+Comment=Back up Steam screenshots into per-game folders
+Exec=$LAUNCHER --show
+Icon=$APP_ID
+Terminal=false
+Categories=Utility;Game;
+Keywords=steam;screenshot;backup;
+StartupNotify=false
+EOF
+chmod 644 "$DESKTOP_DIR/$APP_ID.desktop"
+say "App-menu entry created"
+
+command -v update-desktop-database >/dev/null 2>&1 \
+    && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+command -v gtk-update-icon-cache >/dev/null 2>&1 \
+    && gtk-update-icon-cache -f -t "$DATA_HOME/icons/hicolor" 2>/dev/null || true
+
+# ------------------------------------------------------------- autostart
+
+if [ "$AUTOSTART" = ask ]; then
+    printf '\n'
+    read -r -p "Start automatically when you log in? [Y/n] " reply </dev/tty || reply=Y
+    case "${reply:-Y}" in [Nn]*) AUTOSTART=no ;; *) AUTOSTART=yes ;; esac
+fi
+
+if [ "$AUTOSTART" = yes ]; then
+    mkdir -p "$AUTOSTART_DIR"
+    cat > "$AUTOSTART_DIR/$APP_ID.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$APP_NAME
+Comment=Back up Steam screenshots into per-game folders
+Exec=$LAUNCHER
+Icon=$APP_ID
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5
+X-KDE-autostart-after=panel
+EOF
+    chmod 755 "$AUTOSTART_DIR/$APP_ID.desktop"
+    say "Start-on-login enabled"
+else
+    rm -f "$AUTOSTART_DIR/$APP_ID.desktop"
+    say "Start-on-login not enabled (you can turn it on later in Settings)"
+fi
+
+# ----------------------------------------------------------- uninstaller
+
+cat > "$INSTALL_DIR/uninstall.sh" <<EOF
+#!/usr/bin/env bash
+# Uninstaller for $APP_NAME. Removes the app and its settings.
+# Your backed-up screenshots and Steam's own files are never touched.
+set -u
+
+FROM_APP=no
+[ "\${1:-}" = "--from-app" ] && FROM_APP=yes
+
+if [ "\$FROM_APP" = yes ]; then
+    # Invoked from the running app: wait for it to exit before deleting the
+    # venv its own interpreter is running from.
+    sleep 3
+else
+    printf 'This removes %s, its settings, game-name list and log.\n' "$APP_NAME"
+    printf 'Your backed-up screenshots are NOT touched.\n\n'
+    read -r -p 'Uninstall now? [y/N] ' reply
+    case "\${reply:-N}" in [Yy]*) ;; *) echo 'Cancelled.'; exit 0 ;; esac
+    pkill -f '$APP_DIR' 2>/dev/null || true
+    sleep 1
+fi
+
+rm -f  "$LAUNCHER"
+rm -f  "$DESKTOP_DIR/$APP_ID.desktop"
+rm -f  "$AUTOSTART_DIR/$APP_ID.desktop"
+rm -f  "$ICON_DIR/$APP_ID.svg"
+rm -rf "${CONFIG_HOME}/$APP_ID"
+rm -rf "\${XDG_STATE_HOME:-\$HOME/.local/state}/$APP_ID"
+rm -rf "$INSTALL_DIR"
+
+command -v update-desktop-database >/dev/null 2>&1 \\
+    && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+
+[ "\$FROM_APP" = yes ] || printf '\n%s has been removed.\n' "$APP_NAME"
+EOF
+chmod 755 "$INSTALL_DIR/uninstall.sh"
+
+# ------------------------------------------------------------------- done
+
+step "Done"
+cat <<EOF
+
+  $APP_NAME is installed.
+
+  Launch it         from your app menu, or run: $APP_ID
+  Uninstall         $INSTALL_DIR/uninstall.sh
+                    (or use Uninstall inside the app's Settings)
+
+  It lives in your system tray. Click the tray icon to open the main window.
+  On first run it will ask where to put your backups.
+
+EOF
+
+if [ "$RUN_AFTER" = ask ]; then
+    read -r -p "Start it now? [Y/n] " reply </dev/tty || reply=Y
+    case "${reply:-Y}" in [Nn]*) RUN_AFTER=no ;; *) RUN_AFTER=yes ;; esac
+fi
+
+if [ "$RUN_AFTER" = yes ]; then
+    say "Starting..."
+    setsid "$LAUNCHER" --show >/dev/null 2>&1 &
+    sleep 1
+fi
