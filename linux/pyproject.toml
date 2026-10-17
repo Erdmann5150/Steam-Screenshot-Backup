@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "steam-screenshot-backup"
+version = "1.0.0"
+description = "Consolidate Steam screenshots into per-game folders with readable, sortable filenames"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "PySide6-Essentials>=6.6",
+    "watchdog>=3.0",
+    "Send2Trash>=1.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.gui-scripts]
+steam-screenshot-backup = "ssbackup.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["ssbackup*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
