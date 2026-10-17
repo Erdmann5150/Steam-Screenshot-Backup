@@ -258,7 +258,7 @@ build.ps1                     One-command release build
 
 ## Limitations
 
-- Windows only.
+- This app is Windows only. A separate Linux port lives in [`linux/`](linux/).
 - High-resolution backups require Steam's *"Save an external copy"* option to be
   enabled; Steam does not create uncompressed copies retroactively.
 
@@ -338,8 +338,11 @@ no analytics of any kind.
 import*, which is off by default and marked as dangerous. Even then, deletions
 go to the Recycle Bin, not a permanent delete.
 
-**Will this work on Steam Deck / Linux / macOS?** No - it's a Windows-only
-WinForms app for now, with no firm plans to change that.
+**Will this work on Steam Deck / Linux / macOS?** This app is Windows-only
+WinForms. There is now a separate Linux version in [`linux/`](linux/), built for
+Bazzite and usable on any Linux desktop with a system tray - it produces an
+identical backup layout, so the two can share one backup folder. macOS is not
+supported.
 
 **Checksums for the downloads?** Published in each
 [release's](../../releases) notes.
