@@ -98,6 +98,7 @@ def tray_app(steam_tree, fake_home, monkeypatch, qapp):
     settings.OfflineMode = True
     settings.FirstRunDone = True        # skip the setup wizard
     settings.FirstImportDone = True     # skip the first-run preview modal
+    settings.FileNamingChosen = True    # skip the one-time naming prompt
     settings.StructureMigrated = True
     settings.MetadataBackfilled = True
     settings.ShowNotifications = True
@@ -317,3 +318,51 @@ def test_settings_can_be_reopened_after_closing(tray_app, qapp):
     app.show_settings(None)
     assert app._settings_window.isVisible()
     app._settings_window.close()
+
+
+# ---------------------------------------------------------- naming prompt
+
+def test_existing_install_is_asked_for_file_naming_once(
+        steam_tree, fake_home, monkeypatch, qapp):
+    """Installs set up before naming presets existed get the choice too."""
+    from ssbackup.ui import tray as tray_module
+
+    settings = Settings.load()
+    settings.Destination = str(fake_home / "Backups" / "Steam Screenshots")
+    settings.OfflineMode = True
+    settings.FirstRunDone = True
+    settings.FirstImportDone = True
+    settings.StructureMigrated = True
+    settings.MetadataBackfilled = True
+    settings.save()
+    assert settings.FileNamingChosen is False
+
+    class _FakePrompt:
+        shown = 0
+
+        def __init__(self, current, parent=None):
+            self.current = current
+
+        def exec(self):
+            _FakePrompt.shown += 1
+            return tray_module.QDialog.Accepted
+
+        @property
+        def preset_key(self):
+            return "Reverse"
+
+    offered = []
+    monkeypatch.setattr(AppNameResolver, "_start_refresh_timer", lambda self: None)
+    monkeypatch.setattr(tray_module, "QSystemTrayIcon", _FakeTrayIcon)
+    monkeypatch.setattr(tray_module, "NamingPromptWindow", _FakePrompt)
+    monkeypatch.setattr(tray_module, "offer_rename",
+                        lambda engine, s, preset, parent=None: offered.append(preset))
+
+    app = tray_module.TrayApp(settings, qapp)
+    try:
+        assert _FakePrompt.shown == 1
+        assert offered == ["Reverse"]
+        assert settings.FileNamePreset == "Reverse"
+        assert Settings.load().FileNamingChosen is True
+    finally:
+        app.engine.dispose()

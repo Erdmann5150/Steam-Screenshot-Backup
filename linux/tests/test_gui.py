@@ -573,3 +573,110 @@ def test_progress_dialog_surfaces_errors(qapp, monkeypatch):
 
     widgets.ProgressDialog.run(None, "Working…", "Doing things…", work)
     assert failures and "the disk exploded" in failures[0]
+
+
+# ------------------------------------------------------------- file naming
+
+def test_setup_window_offers_naming(gui_engine, qapp, fake_home):
+    from ssbackup.ui.setup_window import SetupWindow
+    engine, settings = gui_engine
+    w = SetupWindow(str(fake_home / "Shots"), True, engine.steam_roots)
+    assert w.file_name_preset == "Date"
+    w._naming.set_preset_key("Reverse")
+    assert w.file_name_preset == "Reverse"
+    w.deleteLater()
+
+
+def test_naming_picker_shows_live_example(qapp):
+    from ssbackup.ui.naming_picker import NamingPicker
+    p = NamingPicker("Date")
+    assert "2026-04-12 13.37.15.jpg" in p._example.text()
+    fired = []
+    p.changed.connect(lambda: fired.append(True))
+    p._box.setCurrentIndex(p._box.findData("GameDate"))
+    assert "Portal 2 - 2026-04-12" in p._example.text()
+    assert fired
+    p.deleteLater()
+
+
+def test_naming_prompt_window_builds(qapp):
+    from ssbackup.ui.naming_picker import NamingPromptWindow
+    w = NamingPromptWindow("Compact")
+    assert w.preset_key == "Compact"
+    w.deleteLater()
+
+
+def test_settings_naming_change_enables_apply(gui_engine, qapp):
+    from ssbackup.ui.settings_window import SettingsWindow
+    engine, settings = gui_engine
+    w = SettingsWindow(FakeApp(engine, settings), settings)
+    w._naming.set_preset_key("Reverse")
+    assert w._apply.isEnabled() is True
+    w._naming.set_preset_key("Date")
+    assert w._apply.isEnabled() is False
+    w.deleteLater()
+
+
+def _standard_names(settings):
+    from pathlib import Path
+    return sorted(os.listdir(Path(settings.Destination) / "Standard" / "Portal 2"))
+
+
+def test_settings_naming_change_renames_when_accepted(gui_engine, qapp, monkeypatch):
+    from ssbackup.ui.settings_window import SettingsWindow
+    from ssbackup.ui import naming_picker
+    engine, settings = gui_engine
+    w = SettingsWindow(FakeApp(engine, settings), settings)
+
+    asked = []
+    monkeypatch.setattr(naming_picker.MessageDialog, "ask_yes_no",
+                        lambda text, *a, **k: asked.append(text) or True)
+    w._naming.set_preset_key("Compact")
+    w._save_changes()
+
+    assert asked and "Rename your 8 existing backup files" in asked[0]
+    assert settings.FileNamePreset == "Compact"
+    assert Settings.load().FileNamePreset == "Compact"
+    assert "2026-04-12_13-37-15.jpg" in _standard_names(settings)
+    w.deleteLater()
+
+
+def test_settings_naming_change_keeps_names_when_declined(gui_engine, qapp,
+                                                          monkeypatch):
+    from ssbackup.ui.settings_window import SettingsWindow
+    from ssbackup.ui import naming_picker
+    engine, settings = gui_engine
+    w = SettingsWindow(FakeApp(engine, settings), settings)
+
+    monkeypatch.setattr(naming_picker.MessageDialog, "ask_yes_no",
+                        lambda *a, **k: False)
+    w._naming.set_preset_key("Compact")
+    w._save_changes()
+
+    # The new style applies to future backups; existing files keep their names
+    # and are still recognized, so nothing gets copied again.
+    assert settings.FileNamePreset == "Compact"
+    assert "2026-04-12 13.37.15.jpg" in _standard_names(settings)
+    assert engine.full_scan().copied == 0
+    w.deleteLater()
+
+
+def test_settings_naming_rename_uses_preview_when_enabled(gui_engine, qapp,
+                                                          monkeypatch):
+    from ssbackup.ui.settings_window import SettingsWindow
+    from ssbackup.ui import naming_picker
+    engine, settings = gui_engine
+    settings.PreviewBeforeImport = True
+    w = SettingsWindow(FakeApp(engine, settings), settings)
+
+    previewed = []
+    monkeypatch.setattr(naming_picker.PreviewWindow, "confirm",
+                        staticmethod(lambda title, desc, rows, *a, **k:
+                                     previewed.append(rows) or True))
+    monkeypatch.setattr(naming_picker.MessageDialog, "ask_yes_no",
+                        lambda *a, **k: pytest.fail("unexpected yes/no prompt"))
+    w._naming.set_preset_key("Reverse")
+    w._save_changes()
+
+    assert previewed and len(previewed[0]) == 8
+    w.deleteLater()
