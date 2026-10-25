@@ -13,6 +13,7 @@ from enum import Enum
 from pathlib import Path
 
 from . import paths
+from .naming import DEFAULT_PRESET, normalize_preset_key
 
 
 class ThemeMode(str, Enum):
@@ -84,6 +85,14 @@ class Settings:
     # Folder layout under the type folder.  Tokens: {game} {yyyy} {MM} {dd}
     FolderTemplate: str = "{game}"
 
+    # How backup files are named; a key from naming.PRESETS.  Linux-only: the
+    # Windows app ignores it and always writes the default style.
+    FileNamePreset: str = DEFAULT_PRESET
+
+    # Set once the user has picked a naming style, either during first-run
+    # setup or in the one-time prompt shown to installs that predate it.
+    FileNamingChosen: bool = False
+
     Theme: ThemeMode = ThemeMode.DARK
 
     # Set once existing root-level game folders have been moved under Standard/.
@@ -134,6 +143,7 @@ class Settings:
         if not s.Destination.strip():
             s.Destination = str(paths.default_destination())
         s.FolderTemplate = normalize_template(s.FolderTemplate)
+        s.FileNamePreset = normalize_preset_key(s.FileNamePreset)
         return s
 
     def _apply(self, raw: dict) -> None:

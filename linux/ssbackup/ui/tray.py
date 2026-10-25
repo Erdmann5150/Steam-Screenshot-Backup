@@ -11,16 +11,17 @@ import threading
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QDialog, QMenu, QSystemTrayIcon
 
 from .. import __version__
-from ..core import paths, update_checker
+from ..core import naming, paths, update_checker
 from ..core.backup_engine import BackupEngine, RunKind, RunResult
 from ..core.logger import Logger
 from ..core.settings import Settings
 from ..core.trash import trash_path
 from .game_names_window import GameNamesWindow
 from .main_window import MainWindow
+from .naming_picker import NamingPromptWindow, offer_rename
 from .preview_window import PreviewWindow
 from .resync_window import ResyncWindow
 from .settings_window import SettingsWindow
@@ -89,6 +90,9 @@ class TrayApp(QObject):
         self.engine.unresolved_game_found.append(self._bridge.unresolved_found.emit)
 
         self.engine.migrate_structure_if_needed()
+        if not settings.FileNamingChosen:
+            # Before watching starts, so renames can't be seen as deletions.
+            self._ask_file_naming()
         self.engine.start_watching()
         Logger.log(f"Watching for new screenshots. Backing up to: "
                    f"{settings.Destination}")
@@ -168,9 +172,29 @@ class TrayApp(QObject):
         self._settings.BackupStandard = (setup.backup_standard
                                          or not setup.backup_high_res)
         self._settings.BackupHighRes = setup.backup_high_res
+        self._settings.FileNamePreset = setup.file_name_preset
+        self._settings.FileNamingChosen = True
         if setup.auto_start:
             self._autostart_action.setChecked(True)   # handler writes the file
         self._settings.FirstRunDone = True
+
+    def _ask_file_naming(self) -> None:
+        """One-time: installs set up before naming presets existed get the same
+        choice first-run setup now offers, and can rename what's already
+        backed up to match."""
+        old_preset = self._settings.FileNamePreset
+        prompt = NamingPromptWindow(old_preset)
+        # Closing the window instead of clicking Continue keeps the current style.
+        accepted = prompt.exec() == QDialog.Accepted
+        new_preset = prompt.preset_key if accepted else old_preset
+        if new_preset != old_preset:
+            self._settings.FileNamePreset = new_preset
+            Logger.log(f"Setting 'File Naming' changed to "
+                       f"'{naming.get_preset(new_preset).label}' "
+                       f"(was '{naming.get_preset(old_preset).label}')")
+        offer_rename(self.engine, self._settings, new_preset)
+        self._settings.FileNamingChosen = True
+        self._settings.save()
 
     # -------------------------------------------------------------- actions
 
