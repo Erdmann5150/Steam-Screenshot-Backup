@@ -52,8 +52,21 @@ deliberately writes an identical layout — see
 <details>
 <summary><b>Additional features</b></summary>
 
-- **Readable, sortable filenames**: `YYYY-MM-DD HH.MM.SS`, so sorting by name is
-  sorting by capture time.
+- **Readable, sortable filenames**, in a style you choose:
+
+  | Style | Example |
+  | --- | --- |
+  | Date and time (default) | `2026-04-12 13.37.15.jpg` |
+  | Newest first (for Discord) | `9170683764 - 2026-04-12 13.37.15.jpg` |
+  | Game name, then date | `Portal 2 - 2026-04-12 13.37.15.jpg` |
+  | Date and time, no spaces | `2026-04-12_13-37-15.jpg` |
+
+  *Newest first* puts a countdown in front so A–Z order is newest first. Apps
+  that reverse a multi-file upload, Discord among them, then post the batch
+  oldest first, in story order. Change the style any time in
+  **Settings → Backup Configuration**; the app offers to rename what's already
+  backed up (with a preview if *Preview before importing* is on). Declining is
+  safe: every style is recognized, so nothing is ever copied twice.
 - **Custom folder layouts.** Choose between `Game`, `Game/Year`, `Year/Game` and
   more; existing backups can be reorganized in place, with a preview first.
 - **Markdown index.** Optionally maintain a `_Screenshot_Log.md` in each folder
@@ -95,8 +108,10 @@ cd Steam-Screenshot-Backup/linux
 The installer asks whether to start the app on login and whether to launch it
 now. Pass `--yes` to accept both, or `--no-autostart` / `--no-run` to decline.
 
-On first launch, choose your backup folder and which screenshot types to back
-up. That's the entire setup.
+On first launch, choose your backup folder, which screenshot types to back
+up, and how backup files are named. That's the entire setup. (Updating from a
+version without naming styles asks the naming question once on the next
+launch.)
 
 **Updating:** pull and re-run `./install.sh`. It installs over the existing copy
 and keeps your settings, game-name list, and backed-up screenshots untouched.
@@ -177,9 +192,10 @@ the app under **Game Names**, or add entries to
 
 ## Sharing a backup folder with Windows
 
-The backup layout, filename format and `appnames.json` schema are identical to
-the Windows version, and filenames are sanitized with the stricter Windows
-character rules even on Linux. So:
+The backup layout, default filename format and `appnames.json` schema are
+identical to the Windows version, and filenames are sanitized with the stricter
+Windows character rules even on Linux. So, as long as the file naming style is
+left on *Date and time* (the only style the Windows app writes):
 
 - Both machines can back up to the same NAS folder and will cooperate rather
   than produce two divergent trees.
@@ -246,7 +262,7 @@ the other.
 ```bash
 pip install -r requirements-dev.txt
 python -m ssbackup            # run from a checkout
-python -m pytest              # 166 tests, including a headless GUI pass
+python -m pytest              # 229 tests, including a headless GUI pass
 ```
 
 The test suite builds a synthetic Steam installation (two accounts, several

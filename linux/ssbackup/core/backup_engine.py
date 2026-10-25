@@ -5,7 +5,8 @@ structure, restores files deleted from the backup, and survives the destination
 (e.g. a NAS share) going away temporarily.
 
 Backup layout:  <destination>/<Standard|High Resolution>/<template>/<file>
-where <template> defaults to "{game}" and may use {game} {yyyy} {MM} {dd}.
+where <template> defaults to "{game}" and may use {game} {yyyy} {MM} {dd},
+and <file> follows the chosen naming preset (see naming.py).
 
 This is a direct port of the Windows engine, and deliberately produces the same
 paths, the same filenames and the same name cache, so a Windows machine and a
@@ -29,7 +30,7 @@ from pathlib import Path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from . import steam_config
+from . import naming, steam_config
 from .app_names import AppNameResolver
 from .logger import Logger
 from .markdown_index import MarkdownIndex, FILE_NAME as MD_FILE_NAME
@@ -94,10 +95,10 @@ STD_NAME = re.compile(r"^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_(\d+)(\.\w+)
 # Steam's external copies: 646570_20260707214723_1.png
 HIGH_RES_SRC_NAME = re.compile(
     r"^(\d+)_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_(\d+)(\.\w+)$")
-# Our own backup naming:   2026-07-06 21.05.32 (2).jpg
+# The default ("Date") backup naming:   2026-07-06 21.05.32 (2).jpg
+# Recognizing backups goes through naming.is_backup_name, which accepts every
+# preset; this stays for the Windows-compatible format specifically.
 BACKUP_NAME = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}( \(\d+\))?\.\w+$")
-# The timestamp prefix of a backup name.
-BACKUP_TS = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) (\d{2})\.(\d{2})\.(\d{2})")
 # A "game  >  name  [type]" activity-log message.
 FILE_MSG_RX = re.compile(r"^(.+?)\s+›\s+(.+?)\s+\[(Standard|High resolution)\]$")
 # A fallback folder name written when no source could name the game.
@@ -119,27 +120,33 @@ def type_label(t: ScreenshotType) -> str:
     return "Standard" if t == ScreenshotType.STANDARD else "High Resolution"
 
 
-def convert_name(file_name: str, t: ScreenshotType) -> tuple[datetime | None, str | None]:
+def parse_source_name(file_name: str,
+                      t: ScreenshotType) -> tuple[datetime, int, str] | None:
     """20260706210532_1.jpg / 646570_20260706210532_1.png
-    -> (datetime, "2026-07-06 21.05.32.ext")"""
+    -> (datetime, Steam's per-second counter, ".ext")"""
     m = (STD_NAME.match(file_name) if t == ScreenshotType.STANDARD
          else HIGH_RES_SRC_NAME.match(file_name))
     if not m:
-        return None, None
+        return None
 
     g = 1 if t == ScreenshotType.STANDARD else 2   # first timestamp group index
-    parts = [m.group(i) for i in range(g, g + 6)]
-    n = int(m.group(g + 6))
-    ext = m.group(g + 7)
-    suffix = f" ({n})" if n > 1 else ""
-
     try:
-        ts = datetime(int(parts[0]), int(parts[1]), int(parts[2]),
-                      int(parts[3]), int(parts[4]), int(parts[5]))
+        ts = datetime(*(int(m.group(i)) for i in range(g, g + 6)))
     except ValueError:
+        return None
+    return ts, int(m.group(g + 6)), m.group(g + 7)
+
+
+def convert_name(file_name: str, t: ScreenshotType,
+                 preset: str | None = None,
+                 game: str = "") -> tuple[datetime | None, str | None]:
+    """20260706210532_1.jpg / 646570_20260706210532_1.png
+    -> (datetime, "2026-07-06 21.05.32.ext"), or the given preset's name."""
+    parsed = parse_source_name(file_name, t)
+    if parsed is None:
         return None, None
-    return ts, (f"{parts[0]}-{parts[1]}-{parts[2]} "
-                f"{parts[3]}.{parts[4]}.{parts[5]}{suffix}{ext}")
+    ts, n, ext = parsed
+    return ts, naming.format_name(preset, ts, n, ext, game)
 
 
 def expand_template(template: str | None, game: str, ts: datetime) -> str:
@@ -178,13 +185,8 @@ def extract_game_segment(rel: str, template: str | None) -> str | None:
 
 
 def parse_backup_timestamp(name: str) -> datetime | None:
-    m = BACKUP_TS.match(name)
-    if not m:
-        return None
-    try:
-        return datetime(*(int(m.group(i)) for i in range(1, 7)))
-    except ValueError:
-        return None
+    parsed = naming.parse_name(name)
+    return parsed.timestamp if parsed else None
 
 
 # ----------------------------------------------------------- watcher glue
@@ -465,23 +467,21 @@ class BackupEngine:
         """Converts a source name to the readable backup name and copies it if
         it isn't already in the backup.  The size check uses >= because metadata
         tagging makes the backup copy slightly larger than the source."""
-        game = self._resolver.resolve_folder_name(appid)
-        ts, dest_name = convert_name(os.path.basename(src), t)
-        if not dest_name:
+        target = self._target(src, appid, t)
+        if target is None:
             return False
-
-        dest_dir = os.path.join(self.destination, type_folder(t),
-                                expand_template(self._settings.FolderTemplate, game, ts))
-        dest = os.path.join(dest_dir, dest_name)
+        game, ts, dest, existing = target
+        dest_dir = os.path.dirname(dest)
+        dest_name = os.path.basename(dest)
 
         try:
             src_size = os.path.getsize(src)
         except OSError:
             return False
 
-        if os.path.exists(dest):
+        if existing is not None:
             try:
-                if os.path.getsize(dest) >= src_size:
+                if os.path.getsize(existing) >= src_size:
                     if run is not None:
                         run.skipped += 1
                     return False   # already backed up
@@ -521,6 +521,23 @@ class BackupEngine:
         # Dangerous, opt-in: remove the just-imported original.
         self._delete_original_to_trash(src, dest, run)
         return True
+
+    def _target(self, src: str, appid: str, t: ScreenshotType
+                ) -> tuple[str, datetime, str, str | None] | None:
+        """Where a source screenshot belongs in the backup:
+        (game, capture time, path under the current naming preset, path of an
+        existing backup copy or None).  None when the name isn't Steam's."""
+        parsed = parse_source_name(os.path.basename(src), t)
+        if parsed is None:
+            return None
+        ts, n, ext = parsed
+        game = self._resolver.resolve_folder_name(appid)
+        dest_dir = os.path.join(self.destination, type_folder(t),
+                                expand_template(self._settings.FolderTemplate, game, ts))
+        names = naming.candidate_names(ts, n, ext, game,
+                                       self._settings.FileNamePreset)
+        dest = os.path.join(dest_dir, names[0])
+        return game, ts, dest, _first_existing(dest_dir, names)
 
     def _delete_original_to_trash(self, src: str, dest: str,
                                   run: RunResult | None) -> None:
@@ -684,17 +701,12 @@ class BackupEngine:
         done = 0
         for path, appid, src_type in sources:
             try:
-                game = self._resolver.resolve_folder_name(appid)
-                ts, dest_name = convert_name(os.path.basename(path), src_type)
-                if dest_name:
-                    dest = os.path.join(
-                        self.destination, type_folder(src_type),
-                        expand_template(self._settings.FolderTemplate, game, ts),
-                        dest_name)
-                    if (os.path.exists(path) and os.path.exists(dest)
-                            and os.path.getsize(dest) >= os.path.getsize(path)):
-                        trash_path(path)
-                        deleted += 1
+                target = self._target(path, appid, src_type)
+                existing = target[3] if target else None
+                if (existing is not None and os.path.exists(path)
+                        and os.path.getsize(existing) >= os.path.getsize(path)):
+                    trash_path(path)
+                    deleted += 1
             except (OSError, TrashError) as ex:
                 Logger.warn(f"Could not delete original {os.path.basename(path)}: {ex}")
             done += 1
@@ -717,14 +729,11 @@ class BackupEngine:
                 if not root.is_dir():
                     continue
                 for f in root.rglob("*"):
-                    if not f.is_file() or not BACKUP_NAME.match(f.name):
+                    if not f.is_file():
                         continue
                     ts = parse_backup_timestamp(f.name)
                     if ts is None:
-                        try:
-                            ts = datetime.fromtimestamp(f.stat().st_mtime)
-                        except OSError:
-                            continue
+                        continue   # not one of our backup files
                     by_dir.setdefault(str(f.parent), []).append((f.name, ts))
 
             done = 0
@@ -790,10 +799,19 @@ class BackupEngine:
         dest_name = m.group(2).strip()
         t = (ScreenshotType.STANDARD if m.group(3) == "Standard"
              else ScreenshotType.HIGH_RES)
-        ts = parse_backup_timestamp(dest_name) or datetime.min
-        return os.path.join(self.destination, type_folder(t),
-                            expand_template(self._settings.FolderTemplate, game, ts),
-                            dest_name)
+        parsed = naming.parse_name(dest_name)
+        ts = parsed.timestamp if parsed else datetime.min
+        folder = os.path.join(self.destination, type_folder(t),
+                              expand_template(self._settings.FolderTemplate, game, ts))
+        path = os.path.join(folder, dest_name)
+        if parsed is not None and not os.path.exists(path):
+            # Renamed to another naming preset since this entry was logged.
+            renamed = _first_existing(folder, naming.candidate_names(
+                parsed.timestamp, parsed.index, parsed.ext, parsed.game or game,
+                self._settings.FileNamePreset))
+            if renamed is not None:
+                return renamed
+        return path
 
     # ------------------------------------------------ re-sync missing files
 
@@ -805,15 +823,13 @@ class BackupEngine:
 
         for path, appid, t in self.enumerate_sources():
             try:
-                game = self._resolver.resolve_folder_name(appid)
-                ts, dest_name = convert_name(os.path.basename(path), t)
-                if not dest_name:
+                target = self._target(path, appid, t)
+                if target is None:
                     continue
-                dest = os.path.join(
-                    self.destination, type_folder(t),
-                    expand_template(self._settings.FolderTemplate, game, ts), dest_name)
-                if os.path.exists(dest):
+                game, ts, dest, existing = target
+                if existing is not None:
                     continue   # already backed up
+                dest_name = os.path.basename(dest)
 
                 try:
                     size = os.path.getsize(path)
@@ -873,7 +889,7 @@ class BackupEngine:
                 if not root.is_dir():
                     continue
                 for f in root.rglob("*"):
-                    if not f.is_file() or not BACKUP_NAME.match(f.name):
+                    if not f.is_file() or not naming.is_backup_name(f.name):
                         continue
                     files += 1
                     try:
@@ -904,7 +920,7 @@ class BackupEngine:
                         continue
                     if f.suffix.lower() not in (".jpg", ".jpeg", ".png"):
                         continue
-                    if not BACKUP_NAME.match(f.name):
+                    if not naming.is_backup_name(f.name):
                         continue
                     if has_game_name_metadata(f):
                         continue
@@ -963,17 +979,12 @@ class BackupEngine:
             if t is not None and src_type != t:
                 continue
             try:
-                game = self._resolver.resolve_folder_name(appid)
-                ts, dest_name = convert_name(os.path.basename(path), src_type)
-                if not dest_name:
-                    continue
-                dest = os.path.join(
-                    self.destination, type_folder(src_type),
-                    expand_template(self._settings.FolderTemplate, game, ts), dest_name)
-                if not os.path.exists(path) or not os.path.exists(dest):
+                target = self._target(path, appid, src_type)
+                existing = target[3] if target else None
+                if existing is None or not os.path.exists(path):
                     continue
                 src_size = os.path.getsize(path)
-                if os.path.getsize(dest) < src_size:
+                if os.path.getsize(existing) < src_size:
                     continue
                 count += 1
                 total += src_size
@@ -994,7 +1005,7 @@ class BackupEngine:
             if root.is_dir():
                 try:
                     for f in sorted(root.rglob("*")):
-                        if not f.is_file() or not BACKUP_NAME.match(f.name):
+                        if not f.is_file() or not naming.is_backup_name(f.name):
                             continue
                         game = (self._extract_game_from_rel(str(f.relative_to(root)))
                                 or "(unknown)")
@@ -1101,7 +1112,7 @@ class BackupEngine:
         last = segments[-1]
         if len(segments) == 1:
             Logger.deletion(f"{label} backup folder removed", full_path)
-        elif BACKUP_NAME.match(last):
+        elif naming.is_backup_name(last):
             game = self._extract_game_from_rel("/".join(segments[1:]))
             Logger.deletion(f"{game or segments[1]}  ›  {last}  [{label}]", full_path)
         elif not os.path.splitext(last)[1]:
@@ -1262,7 +1273,7 @@ class BackupEngine:
                         continue
                     # Only move folders that actually look like our game backups.
                     try:
-                        if not any(f.is_file() and BACKUP_NAME.match(f.name)
+                        if not any(f.is_file() and naming.is_backup_name(f.name)
                                    for f in d.iterdir()):
                             continue
                     except OSError:
@@ -1329,15 +1340,12 @@ class BackupEngine:
             return plan
         for path, appid, t in self.enumerate_sources():
             try:
-                game = self._resolver.resolve_folder_name(appid)
-                ts, dest_name = convert_name(os.path.basename(path), t)
-                if not dest_name:
+                target = self._target(path, appid, t)
+                if target is None:
                     continue
-                dest = os.path.join(
-                    self.destination, type_folder(t),
-                    expand_template(self._settings.FolderTemplate, game, ts), dest_name)
-                if (os.path.exists(dest)
-                        and os.path.getsize(dest) >= os.path.getsize(path)):
+                _, _, dest, existing = target
+                if (existing is not None
+                        and os.path.getsize(existing) >= os.path.getsize(path)):
                     continue
                 plan.append((path, dest))
             except OSError:
@@ -1357,13 +1365,13 @@ class BackupEngine:
             except OSError:
                 continue
             for src in candidates:
-                if not src.is_file() or not BACKUP_NAME.match(src.name):
-                    continue
-                game = extract_game_segment(str(src.relative_to(root)), old_template)
-                if not game:
+                if not src.is_file():
                     continue
                 ts = parse_backup_timestamp(src.name)
                 if ts is None:
+                    continue
+                game = extract_game_segment(str(src.relative_to(root)), old_template)
+                if not game:
                     continue
                 new_rel = expand_template(new_template, game, ts)
                 dest = root / new_rel / src.name
@@ -1393,6 +1401,90 @@ class BackupEngine:
             Logger.error(f"Layout reorganization failed: {ex}")
         finally:
             self._suppress_dest_events = False
+
+    # -------------------------------------------------------- file naming
+
+    def plan_rename(self, preset: str) -> list[tuple[str, str]]:
+        """The renames switching every existing backup file to a naming preset
+        would make.  Files already in that style, and anything that isn't one of
+        our backups, are left out."""
+        plan: list[tuple[str, str]] = []
+        for folder in (STANDARD_FOLDER, HIGH_RES_FOLDER):
+            root = Path(self.destination) / folder
+            if not root.is_dir():
+                continue
+            try:
+                candidates = sorted(root.rglob("*"))
+            except OSError:
+                continue
+            for src in candidates:
+                if not src.is_file():
+                    continue
+                parsed = naming.parse_name(src.name)
+                if parsed is None:
+                    continue
+                # A game-first name already says which game it is; otherwise the
+                # folder it sits in does.
+                game = (parsed.game
+                        or self._extract_game_from_rel(str(src.relative_to(root)))
+                        or "")
+                new_name = naming.format_name(preset, parsed.timestamp,
+                                              parsed.index, parsed.ext, game)
+                if new_name != src.name:
+                    plan.append((str(src), str(src.with_name(new_name))))
+        return plan
+
+    def rename_backups(self, preset: str, progress=None) -> int:
+        """Renames existing backup files to a naming preset in place.  A file
+        whose new name is already taken is left alone rather than overwriting
+        anything.  Markdown indexes in affected folders are rebuilt so their
+        links keep working."""
+        plan = self.plan_rename(preset)
+        renamed = 0
+        done = 0
+        touched: set[str] = set()
+        self._suppress_dest_events = True
+        try:
+            for src, dest in plan:
+                try:
+                    if os.path.exists(dest):
+                        Logger.warn(f"Not renaming {os.path.basename(src)}: "
+                                    f"{os.path.basename(dest)} already exists.")
+                    else:
+                        os.rename(src, dest)
+                        renamed += 1
+                        touched.add(os.path.dirname(dest))
+                except OSError as ex:
+                    Logger.warn(f"Could not rename {os.path.basename(src)}: {ex}")
+                done += 1
+                if progress:
+                    progress(done, len(plan))
+
+            for directory in touched:
+                if os.path.isfile(os.path.join(directory, MD_FILE_NAME)):
+                    self._rebuild_markdown_folder(directory)
+
+            if renamed > 0:
+                Logger.log(f'Renamed {renamed} backup file{"" if renamed == 1 else "s"} '
+                           f'to the "{naming.get_preset(preset).label}" naming style.')
+        finally:
+            # Renames inside the tree arrive as moves, which the deletion
+            # watcher would otherwise report and "restore".
+            self._schedule_unsuppress()
+        return renamed
+
+    def _rebuild_markdown_folder(self, directory: str) -> None:
+        images: list[tuple[str, datetime]] = []
+        try:
+            for f in Path(directory).iterdir():
+                ts = parse_backup_timestamp(f.name) if f.is_file() else None
+                if ts is not None:
+                    images.append((f.name, ts))
+        except OSError as ex:
+            Logger.warn(f"Markdown rebuild error: {ex}")
+            return
+        images.sort(key=lambda x: x[1])
+        self._markdown.rebuild(directory, images)
 
     # -------------------------------------------------------------- teardown
 
@@ -1458,6 +1550,14 @@ def _wait_for_stable_file(path: str) -> bool:
         time.sleep(0.25)
     Logger.warn(f"File never settled, attempting copy anyway: {path}")
     return os.path.exists(path)
+
+
+def _first_existing(directory: str, names: list[str]) -> str | None:
+    for name in names:
+        path = os.path.join(directory, name)
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def _count_and_size(root: Path, pattern: str) -> tuple[int, int]:

@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from ..core import steam_config
+from ..core import naming, steam_config
+from .naming_picker import NamingPicker, fit_height
 from .theme import Theme
 from .widgets import button, edge, header_label, panel, small_label
 
@@ -105,6 +106,11 @@ class SetupWindow(QDialog):
         v.addWidget(note)
         v.addSpacing(6)
 
+        v.addWidget(header_label("FILE NAMES"))
+        self._naming = NamingPicker(naming.DEFAULT_PRESET)
+        v.addWidget(self._naming)
+        v.addSpacing(6)
+
         self._auto_start = QCheckBox("Start automatically when I log in")
         self._auto_start.setChecked(True)
         v.addWidget(self._auto_start)
@@ -123,7 +129,7 @@ class SetupWindow(QDialog):
         foot_row.addWidget(go)
         layout.addWidget(foot)
 
-        self.adjustSize()
+        fit_height(self)
 
     # ---------------------------------------------------------------- values
 
@@ -142,6 +148,10 @@ class SetupWindow(QDialog):
     @property
     def backup_high_res(self) -> bool:
         return self._high_res.isChecked()
+
+    @property
+    def file_name_preset(self) -> str:
+        return self._naming.preset_key
 
     def _browse(self) -> None:
         chosen = QFileDialog.getExistingDirectory(

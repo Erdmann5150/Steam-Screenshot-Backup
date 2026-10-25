@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "steam-screenshot-backup"
-version = "1.0.0"
+version = "1.1.0"
 description = "Consolidate Steam screenshots into per-game folders with readable, sortable filenames"
 readme = "README.md"
 requires-python = ">=3.10"

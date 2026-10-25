@@ -1,7 +1,7 @@
 """All app configuration in one place, across two tabs.
 
-Changes are applied when Apply is clicked; destination and layout changes offer
-to migrate or reorganize existing backups first, with a preview.
+Changes are applied when Apply is clicked; destination, layout and file-naming
+changes offer to migrate, reorganize or rename existing backups first.
 """
 
 from __future__ import annotations
@@ -15,12 +15,13 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from ..core import paths, steam_config
+from ..core import naming, paths, steam_config
 from ..core.backup_engine import (
     HIGH_RES_FOLDER, STANDARD_FOLDER, ScreenshotType, type_label,
 )
 from ..core.logger import Logger
 from ..core.settings import ThemeMode
+from .naming_picker import NamingPicker, offer_rename
 from .preview_window import PreviewWindow
 from .theme import Theme
 from .widgets import (
@@ -253,6 +254,13 @@ class SettingsWindow(QDialog):
         self._layout_box.setCurrentIndex(idx)
         v.addWidget(self._layout_box)
 
+        self._section(v, "FILE NAMES")
+        self._naming = NamingPicker(self._settings.FileNamePreset)
+        v.addWidget(self._naming)
+        self._hint(v, "Only \"Date and time\" matches the Windows app. With "
+                      "another style, a Windows install sharing this backup "
+                      "folder would copy its own differently-named duplicates.")
+
         self._section(v, "STEAM INSTALLATION")
         found = self._app.engine.steam_roots
         self._hint(v, "Detected: " + steam_config.describe_installs(found))
@@ -352,6 +360,7 @@ class SettingsWindow(QDialog):
             self._high_res_folder.text().strip(),
             self._steam_path.text().strip(),
             LAYOUT_PRESETS[self._layout_box.currentIndex()][1],
+            self._naming.preset_key,
             self._standard.isChecked(),
             self._high_res.isChecked(),
             self._auto_start.isChecked(),
@@ -381,6 +390,7 @@ class SettingsWindow(QDialog):
             w.textChanged.connect(self._update_apply_button)
         for w in (self._layout_box, self._theme):
             w.currentIndexChanged.connect(self._update_apply_button)
+        self._naming.changed.connect(self._update_apply_button)
         for w in (self._standard, self._high_res, self._auto_start,
                   self._auto_restore, self._delete_originals,
                   self._show_notifications, self._markdown_index,
@@ -439,6 +449,8 @@ class SettingsWindow(QDialog):
         old_dest = s.Destination
         old_template = s.FolderTemplate or "{game}"
         new_template = LAYOUT_PRESETS[self._layout_box.currentIndex()][1]
+        old_naming = s.FileNamePreset
+        new_naming = self._naming.preset_key
 
         old_override = s.HighResFolderOverride or ""
         new_override = self._high_res_folder.text().strip()
@@ -545,8 +557,19 @@ class SettingsWindow(QDialog):
                                 if t == old_template), 0)
                 self._layout_box.setCurrentIndex(old_idx)
 
+        if new_naming != old_naming:
+            # After any move or reorganize, so this renames files where they
+            # now are.  Declining the rename still adopts the new style for
+            # future backups: every style is recognized, so nothing is recopied.
+            s.FileNamePreset = new_naming
+            s.FileNamingChosen = True
+            if _backup_exists(s.Destination):
+                offer_rename(self._app.engine, s, new_naming, self)
+
         _log_change("Backup Folder", old_dest, s.Destination)
         _log_change("Folder Layout", old_template, s.FolderTemplate)
+        _log_change("File Naming", naming.get_preset(old_naming).label,
+                    naming.get_preset(s.FileNamePreset).label)
         _log_change("High-Resolution Folder Override",
                     old_override or "(auto-detect)",
                     s.HighResFolderOverride or "(auto-detect)")
