@@ -1,0 +1,130 @@
+import { CheckBox, ComboBox, LineEdit, Palette, TabWidget } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, Divider, Hint, SectionHeader } from "widgets.slint";
+
+component Section inherits VerticalLayout {
+    in property <string> heading;
+    in property <color> heading-color: Theme.text-dim;
+    spacing: 6px;
+    padding-bottom: 10px;
+    SectionHeader { text: root.heading; color: root.heading-color; }
+    @children
+}
+
+component GeneralTab inherits VerticalLayout {
+    padding: 16px;
+    padding-top: 12px;
+    alignment: start;
+
+    Section {
+        heading: "APPEARANCE";
+        ComboBox {
+            width: 260px;
+            model: ["Follow system", "Dark", "Light"];
+            current-value: Theme.dark ? "Dark" : "Light";
+        }
+        CheckBox { text: "Show popup notifications"; checked: true; }
+    }
+    Section {
+        heading: "STARTUP";
+        CheckBox { text: "Start automatically when I sign in"; checked: true; }
+    }
+    Section {
+        heading: "IMPORTING";
+        CheckBox { text: "Generate a Markdown index (_Screenshot_Log.md) in each folder"; }
+        CheckBox { text: "Preview a list of changes before importing batches"; }
+        Hint { text: "Real-time captures during play are never interrupted; this only affects batch scans."; }
+    }
+    Section {
+        heading: "DELETED-FILE PROTECTION";
+        CheckBox { text: "Automatically restore files deleted from the backup"; checked: true; }
+        Hint { text: "When off, deletions are only logged — recover them yourself from \"Re-Sync\"."; }
+    }
+    Section {
+        heading: "PRIVACY";
+        CheckBox { text: "Offline mode: never contact Steam's servers for game names"; }
+        Hint { text: "Game names still resolve from local Steam data; only unrecognized games fall back to an \"AppID_<id>\" folder name."; }
+    }
+    Section {
+        heading: "UPDATES";
+        CheckBox { text: "Automatically check for new versions once a day"; checked: true; }
+        Hint { text: "A read-only check against this project's GitHub releases page — no data about you or your files is sent, just a request for the latest version number."; }
+    }
+}
+
+component BackupTab inherits VerticalLayout {
+    padding: 16px;
+    padding-top: 12px;
+    alignment: start;
+
+    Section {
+        heading: "BACKUP FOLDER";
+        HorizontalLayout {
+            spacing: 8px;
+            LineEdit { text: "~/Pictures/Steam Screenshots"; }
+            AppButton { text: "Browse"; min-width: 92px; }
+        }
+    }
+    Section {
+        heading: "STEAM INSTALLS FOUND";
+        Text { text: "✓  Native   ~/.local/share/Steam"; color: Theme.success; }
+        Text { text: "✓  Flatpak  ~/.var/app/com.valvesoftware.Steam/.local/share/Steam"; color: Theme.success; }
+    }
+    Section {
+        heading: "WHAT TO BACK UP";
+        CheckBox { text: "Standard screenshots (Steam's compressed library copies)"; checked: true; }
+        CheckBox { text: "High-resolution screenshots (Steam's \"save an external copy\" files)"; checked: true; }
+        Hint { text: "High-resolution folder (auto-detected; set only to use a different one):"; }
+        HorizontalLayout {
+            padding-left: 28px;
+            spacing: 8px;
+            LineEdit { text: "~/Pictures/SteamHighResolution"; enabled: false; }
+            AppButton { text: "Browse"; min-width: 92px; }
+        }
+    }
+    Section {
+        heading: "FOLDER LAYOUT (INSIDE EACH TYPE FOLDER)";
+        ComboBox { width: 260px; model: ["Game name", "Game name / Year", "Year / Game name"]; current-value: "Game name"; }
+    }
+    Section {
+        heading: "DANGER ZONE";
+        heading-color: Theme.error;
+        CheckBox { text: "Delete original Steam screenshots after import"; }
+        Hint { text: "Removes each original from Steam once it is safely backed up. Files go to the Trash / Recycle Bin (recoverable), not permanent deletion."; }
+    }
+}
+
+export component SettingsWindow inherits Window {
+    title: "Settings — Steam Screenshot Backup";
+    icon: @image-url("icons/app.png");
+    preferred-width: 600px;
+    preferred-height: 720px;
+    background: Theme.background;
+    default-font-size: 13px;
+
+    in property <int> tab: 0;
+
+    callback apply-theme(bool);
+    apply-theme(dark) => {
+        Theme.dark = dark;
+        Palette.color-scheme = dark ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    VerticalLayout {
+        TabWidget {
+            vertical-stretch: 1;
+            current-index: root.tab;
+            Tab { title: "General"; GeneralTab { } }
+            Tab { title: "Backup Configuration"; BackupTab { } }
+        }
+        Divider { }
+        HorizontalLayout {
+            padding: 12px;
+            spacing: 10px;
+            AppButton { text: "Uninstall"; danger: true; min-width: 110px; }
+            Rectangle { horizontal-stretch: 1; }
+            AppButton { text: "Apply"; primary: true; min-width: 96px; }
+            AppButton { text: "Close"; min-width: 96px; }
+        }
+    }
+}

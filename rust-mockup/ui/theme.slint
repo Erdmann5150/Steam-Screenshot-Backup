@@ -1,0 +1,19 @@
+// Same palette as app/Theme.cs, so the Rust build would look like the
+// current Windows app in both light and dark mode.
+export global Theme {
+    in-out property <bool> dark: true;
+
+    out property <color> background:  dark ? #161d25 : #f4f7fa;
+    out property <color> row-alt:     dark ? #1b232d : #ecf0f4;
+    out property <color> panel:       dark ? #202934 : #ffffff;
+    out property <color> panel-edge:  dark ? #354252 : #d0d8e0;
+    out property <color> text:        dark ? #d6e2eb : #1a2632;
+    out property <color> text-dim:    dark ? #7e8f9e : #6c7a88;
+    out property <color> accent:      dark ? #66c0f4 : #166a9e;
+    out property <color> accent-dark: dark ? #1c5274 : #166a9e;
+    out property <color> warning:     dark ? #e9b95b : #9e6a0a;
+    out property <color> error:       dark ? #e86a64 : #b82a24;
+    out property <color> success:     dark ? #81c995 : #16803d;
+    out property <color> button:      dark ? #2c3846 : #e8eef4;
+    out property <color> button-edge: dark ? #1a222b : #d6e0e9;
+}

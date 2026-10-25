@@ -1,0 +1,166 @@
+import { ComboBox, ListView, Palette } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, Divider } from "widgets.slint";
+
+export struct LogEntry {
+    time: string,
+    kind: string,
+    details: string,
+}
+
+component Stat inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <color> value-color: Theme.text;
+    horizontal-stretch: 1;
+    VerticalLayout {
+        spacing: 8px;
+        Text { text: root.label; color: Theme.text-dim; font-size: 12px; font-weight: 600; }
+        Text { text: root.value; color: root.value-color; font-size: 22px; font-weight: 600; }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "Steam Screenshot Backup";
+    icon: @image-url("icons/app.png");
+    preferred-width: 940px;
+    preferred-height: 600px;
+    min-width: 720px;
+    min-height: 420px;
+    background: Theme.background;
+    default-font-size: 13px;
+
+    callback apply-theme(bool);
+    apply-theme(dark) => {
+        Theme.dark = dark;
+        Palette.color-scheme = dark ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    // Static sample data; the real app would push rows from the backup engine.
+    in property <[LogEntry]> entries: [
+        { time: "2026-07-10 17:12:39", kind: "Info",     details: "Backup run complete: nothing new to copy." },
+        { time: "2026-07-10 17:09:39", kind: "Warning",  details: "Could not delete original 20260710170542_1.jpg: the file is in use by another process." },
+        { time: "2026-07-10 17:06:39", kind: "Warning",  details: "Game folder could not be named automatically: AppID_2379780 (2379780) — open Game Names to identify it." },
+        { time: "2026-07-10 17:03:39", kind: "Error",    details: "Copy failed for ~/.steam/steam/userdata/123456789/760/remote/367520/screenshots/20260710165912_1.jpg: No space left on device" },
+        { time: "2026-07-10 16:56:39", kind: "Deletion", details: "Pumpkin Jack  ›  folder removed  [Standard]" },
+        { time: "2026-07-10 16:48:39", kind: "Restore",  details: "Hollow Knight  ›  2025-08-25 20.46.10.jpg  [Standard]" },
+        { time: "2026-07-10 16:41:39", kind: "Backup",   details: "Slay the Spire  ›  2026-07-10 16.41.05.jpg  [High Resolution]" },
+        { time: "2026-07-10 16:44:39", kind: "Update",   details: "Update available: version 4.1.0 (currently running 4.0.0)." },
+        { time: "2026-07-10 16:40:39", kind: "Info",     details: "Watching for new screenshots. Backing up to: ~/Pictures/Steam Screenshots" },
+    ];
+
+    pure function kind-color(kind: string) -> color {
+        kind == "Warning" || kind == "Deletion" ? Theme.warning
+            : kind == "Error" ? Theme.error
+            : kind == "Restore" ? Theme.success
+            : kind == "Backup" || kind == "Update" ? Theme.accent
+            : Theme.text-dim
+    }
+
+    VerticalLayout {
+        // Toolbar
+        HorizontalLayout {
+            padding: 6px;
+            spacing: 8px;
+            alignment: start;
+            AppButton { text: "Backup Now"; primary: true; min-width: 120px; }
+            AppButton { text: "Open Backup Folder"; }
+            AppButton { text: "Re-Sync"; }
+            AppButton { text: "Pause Monitoring"; min-width: 155px; }
+            AppButton { text: "Settings"; }
+            AppButton { text: "Game Names"; attention: true; }
+            AppButton { text: "Utilities"; icon: @image-url("icons/gear.svg"); min-width: 120px; }
+        }
+
+        Divider { }
+
+        // Statistics strip
+        Rectangle {
+            background: Theme.background;
+            HorizontalLayout {
+                padding: 10px;
+                padding-top: 12px;
+                padding-bottom: 14px;
+                Stat { label: "GAMES BACKED UP"; value: "31"; }
+                Stat { label: "SCREENSHOTS BACKED UP"; value: "2011  ·  681.4 MB"; }
+                Stat { label: "THIS SESSION"; value: "0 files  ·  0 B"; value-color: Theme.accent; }
+            }
+        }
+
+        Divider { }
+
+        // Filter row
+        HorizontalLayout {
+            padding: 6px;
+            spacing: 8px;
+            ComboBox {
+                width: 210px;
+                model: ["All activity", "Backups", "Restores", "Deletions", "Warnings & errors", "Info"];
+                current-value: "All activity";
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Text {
+                text: entries.length + " entries this session";
+                color: Theme.text-dim;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+        }
+
+        // Activity log header
+        Rectangle {
+            background: Theme.panel;
+            height: 24px;
+            HorizontalLayout {
+                padding-left: 4px;
+                Text { width: 150px; text: "Time"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                Text { width: 96px; text: "Event"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                Text { text: "Details"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+            }
+        }
+
+        // Activity log rows
+        ListView {
+            vertical-stretch: 1;
+            for e[i] in entries: Rectangle {
+                height: 21px;
+                background: Math.mod(i, 2) == 0 ? Theme.background : Theme.row-alt;
+                HorizontalLayout {
+                    padding-left: 4px;
+                    padding-right: 4px;
+                    Text { width: 150px; text: e.time; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { width: 96px; text: e.kind; color: kind-color(e.kind); vertical-alignment: center; }
+                    Text {
+                        text: e.details;
+                        color: e.kind == "Error" ? Theme.error : Theme.text;
+                        vertical-alignment: center;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                    }
+                }
+                Divider { y: parent.height - 1px; }
+            }
+        }
+
+        // Footer
+        Rectangle {
+            background: Theme.background;
+            Divider { y: 0; }
+            HorizontalLayout {
+                padding: 8px;
+                spacing: 16px;
+                AppButton { text: "Open Full Log File"; }
+                Text {
+                    text: "Double-click a backup or restore entry to show the file in your file manager";
+                    color: Theme.text-dim;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+                Text { text: "v4.0.0"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                AppButton { text: "Close"; min-width: 92px; }
+            }
+        }
+    }
+}

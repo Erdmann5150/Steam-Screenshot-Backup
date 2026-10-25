@@ -1,0 +1,17 @@
+[package]
+name = "ssbackup-gui-mockup"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Non-functional Slint GUI mockup for a possible cross-platform Rust rewrite"
+license = "MIT"
+
+[dependencies]
+slint = { version = "1.18", features = ["renderer-software"] }
+
+[build-dependencies]
+slint-build = "1.18"
+
+[profile.release]
+strip = true
+lto = true

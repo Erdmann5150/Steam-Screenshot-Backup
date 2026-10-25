@@ -1,0 +1,105 @@
+import { CheckBox, ListView, Palette } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, Divider } from "widgets.slint";
+
+// Slint has no tree widget, so the tree is a flattened list: each row knows
+// its depth and whether it is expanded. The real app would rebuild this list
+// from the folder tree whenever a node is toggled.
+export struct TreeRow {
+    depth: int,
+    label: string,
+    count: int,
+    expandable: bool,
+    expanded: bool,
+}
+
+export component DeleteWindow inherits Window {
+    title: "Granular Deletion";
+    icon: @image-url("icons/app.png");
+    preferred-width: 640px;
+    preferred-height: 640px;
+    background: Theme.background;
+    default-font-size: 13px;
+
+    callback apply-theme(bool);
+    apply-theme(dark) => {
+        Theme.dark = dark;
+        Palette.color-scheme = dark ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    in property <[TreeRow]> rows: [
+        { depth: 0, label: "Standard", count: 1955, expandable: true },
+        { depth: 0, label: "High Resolution", count: 22, expandable: true },
+        { depth: 0, label: "Steam Screenshots — Standard", count: 745, expandable: true, expanded: true },
+        { depth: 1, label: "Pumpkin Jack", count: 72, expandable: true },
+        { depth: 1, label: "Sea of Stars Sunset Edition", count: 58, expandable: true },
+        { depth: 1, label: "DREDGE", count: 127, expandable: true },
+        { depth: 1, label: "RoboCop Rogue City", count: 120, expandable: true },
+        { depth: 1, label: "Marvel's Spider-Man Remastered", count: 3, expandable: true },
+        { depth: 1, label: "Diablo® IV", count: 33, expandable: true },
+        { depth: 1, label: "Balatro", count: 3, expandable: true, expanded: true },
+        { depth: 2, label: "2026-03-02 21.14.07.jpg", count: -1 },
+        { depth: 2, label: "2026-03-02 21.40.55.jpg", count: -1 },
+        { depth: 2, label: "2026-03-04 19.02.31.jpg", count: -1 },
+        { depth: 1, label: "Path of Exile 2", count: 18, expandable: true },
+        { depth: 1, label: "Battlefield™ 6", count: 133, expandable: true },
+        { depth: 1, label: "The Witcher 3 Wild Hunt", count: 2, expandable: true },
+        { depth: 1, label: "Hollow Knight", count: 1, expandable: true },
+        { depth: 1, label: "Slay the Spire", count: 41, expandable: true },
+        { depth: 0, label: "Steam Screenshots — High Resolution", count: 22, expandable: true, expanded: true },
+        { depth: 1, label: "Slay the Spire", count: 22, expandable: true },
+    ];
+
+    VerticalLayout {
+        HorizontalLayout {
+            padding: 14px;
+            Text { text: "Choose Files to Delete"; color: Theme.text; font-weight: 600; }
+        }
+        Divider { }
+
+        ListView {
+            vertical-stretch: 1;
+            for row[i] in rows: Rectangle {
+                height: 24px;
+                background: row.depth == 0 ? Theme.panel : Theme.background;
+                HorizontalLayout {
+                    padding-left: 8px + row.depth * 20px;
+                    spacing: 4px;
+                    Rectangle {
+                        width: 14px;
+                        if row.expandable: Path {
+                            width: 8px;
+                            height: 8px;
+                            viewbox-width: 8;
+                            viewbox-height: 8;
+                            fill: Theme.text-dim;
+                            commands: row.expanded ? "M 0 1.5 L 8 1.5 L 4 6.5 Z" : "M 1.5 0 L 6.5 4 L 1.5 8 Z";
+                        }
+                    }
+                    CheckBox { checked: row.label == "Balatro" || row.depth == 2; }
+                    Text {
+                        text: row.label;
+                        color: row.depth == 0 ? Theme.text : Theme.text.mix(Theme.text-dim, 0.75);
+                        vertical-alignment: center;
+                    }
+                    if row.count >= 0: Text {
+                        text: "(" + row.count + ")";
+                        color: Theme.text-dim;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+            }
+        }
+
+        Divider { }
+        HorizontalLayout {
+            padding: 12px;
+            spacing: 10px;
+            Text { text: "3 files selected (1.2 MB)"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            AppButton { text: "Delete Selected"; primary: true; min-width: 140px; }
+            AppButton { text: "Close"; min-width: 110px; }
+        }
+    }
+}

@@ -1,0 +1,69 @@
+import { Theme } from "theme.slint";
+
+// Flat button matching the WinForms Theme.StyleButton look.
+export component AppButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> attention;   // amber border, e.g. unresolved game names
+    in property <bool> danger;      // red label, e.g. Uninstall
+    in property <bool> enabled: true;
+    in property <image> icon;
+    callback clicked;
+
+    min-height: 32px;
+    min-width: label.preferred-width + (icon.width > 0 ? 44px : 30px);
+    horizontal-stretch: 0;
+    border-radius: 2px;
+    border-width: attention || primary ? 2px : 1px;
+    border-color: attention ? Theme.warning : primary ? Theme.accent : Theme.panel-edge;
+    background: !enabled ? Theme.button.with-alpha(0.5)
+        : touch.pressed ? Theme.accent-dark
+        : touch.has-hover ? (primary ? Theme.accent-dark.brighter(25%) : Theme.button.brighter(15%))
+        : primary ? Theme.accent-dark : Theme.button;
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 6px;
+        if icon.width > 0: Image {
+            source: root.icon;
+            width: 14px;
+            colorize: Theme.text;
+        }
+        label := Text {
+            text: root.text;
+            color: !root.enabled ? Theme.text-dim : root.danger ? Theme.error : primary ? #ffffff : Theme.text;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Uppercase dim section heading used throughout Settings.
+export component SectionHeader inherits Text {
+    color: Theme.text-dim;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+// Dim, wrapped explanation text indented under a checkbox.
+export component Hint inherits HorizontalLayout {
+    in property <string> text;
+    in property <length> indent: 28px;
+    padding-left: indent;
+    Text {
+        text: root.text;
+        color: Theme.text-dim;
+        font-size: 12px;
+        wrap: word-wrap;
+    }
+}
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.panel-edge;
+}
